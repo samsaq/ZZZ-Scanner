@@ -6,6 +6,11 @@ import logging
 from keyboard import press
 from multiprocessing import Queue
 
+# screen resolutions supported enum
+class ScreenResolution:
+    RES_1440P = (2560, 1440)
+    RES_1080P = (1920, 1080)
+
 
 def resource_path(relative_path):
     """Get absolute path to resource, works for dev and for PyInstaller"""
@@ -30,6 +35,9 @@ def setup_logging(log_file_path):
 # Get the screen resolution
 screenWidth, screenHeight = pyautogui.size()
 
+# get the screen resolution enum
+screenResolution = ScreenResolution.RES_1440P if screenWidth == 2560 else ScreenResolution.RES_1080P
+
 
 def switchToZZZ():
     logging.info("Switching to ZenlessZoneZero")
@@ -51,6 +59,12 @@ def getToEquipmentScreen(queue: Queue, pageLoadTime):
     pyautogui.sleep(pageLoadTime)
     # adjust the target based on devMode
     target = "./Target_Images/zzz-equipment-button.png"
+
+    # if the screen resolution is 1080p, we need to adjust the target
+    if screenResolution == ScreenResolution.RES_1080P:
+        target = "./Target_Images/zzz-equipment-button-1080p.png"
+
+
     # press the equipment button to get to the equipment screen
     try:
         equipmentButton = pyautogui.locateOnScreen(target, confidence=0.8)
@@ -137,7 +151,7 @@ def scanPartition(partitionNumber, queue: Queue, discScanTime):
 
     curRowStart = startPosition
     scanNumber = 1
-    while not endOfDiskDrives:  # scan until the last row is visible on the screen
+    while True:  # Changed to infinite loop with explicit break
         scanNumber = scanRow(
             columnNumber,
             curRowStart,
@@ -147,18 +161,13 @@ def scanPartition(partitionNumber, queue: Queue, discScanTime):
             discScanTime,
             scanNumber,
         )
-        pyautogui.scroll(-1)
+        
         endOfDiskDrives = scanForEndOfDiskDrives(distanceBetwenRows)
+        if endOfDiskDrives:
+            break  # Exit after scanning the row where we found the end
+            
+        pyautogui.scroll(-1)
 
-    scanNumber = scanRow(  # scan the top row of the final page of disk drives
-        columnNumber,
-        curRowStart,
-        distanceBetwenColumns,
-        partitionNumber,
-        queue,
-        discScanTime,
-        scanNumber,
-    )
     # for loop for the remaining rows on the final page of disk drives
     for i in range(2, rowNumber + 1):
         curRowStart = (
@@ -188,7 +197,7 @@ def scanRow(
     discScanTime,
     scanNumber=1,
 ):
-    pyautogui.click()
+    #pyautogui.click()
     for i in range(1, columns + 1):
         x = rowStartPosition[0] + (i - 1) * distanceBetwenColumns
         y = rowStartPosition[1]
@@ -213,7 +222,7 @@ def scanRowUntilEndOfDiskDrives(
 ):
     # check the current row for the end of disk drives
     endOfDiskDrives = scanForEndOfDiskDrives(distanceBetwenRows, rowNum)
-    pyautogui.click()
+    #pyautogui.click()
     for i in range(1, columns + 1):
         x = rowStartPosition[0] + (i - 1) * distanceBetwenColumns
         y = rowStartPosition[1]
@@ -232,6 +241,8 @@ def scanForEndOfDiskDrives(distanceBetwenRows, rowNumber=None):
     if rowNumber == None:
         try:
             target = "./Target_Images/zzz-no-disk-drive-icon.png"
+            if screenResolution == ScreenResolution.RES_1080P:
+                target = "./Target_Images/zzz-no-disk-drive-icon-1080p.png"
             endOfDiskDrivesIcon = pyautogui.locateOnScreen(
                 target,
                 confidence=0.8,
@@ -241,6 +252,8 @@ def scanForEndOfDiskDrives(distanceBetwenRows, rowNumber=None):
 
         try:
             target = "./Target_Images/zzz-no-disk-drive-scrollbar.png"
+            if screenResolution == ScreenResolution.RES_1080P:
+                target = "./Target_Images/zzz-no-disk-drive-scrollbar-1080p.png"
             endOfDiskDrivesScrollbar = pyautogui.locateOnScreen(
                 target,
                 confidence=0.95,
@@ -261,6 +274,8 @@ def scanForEndOfDiskDrives(distanceBetwenRows, rowNumber=None):
     endOfDiskDrives = False
     try:
         target = "./Target_Images/zzz-no-disk-drive-icon.png"
+        if screenResolution == ScreenResolution.RES_1080P:
+            target = "./Target_Images/zzz-no-disk-drive-icon-1080p.png"
         endOfDiskDrives = pyautogui.locateOnScreen(
             target,
             confidence=0.8,
@@ -330,4 +345,17 @@ def getImages(queue: Queue, pageLoadTime, discScanTime):
 
 # a test function to run the getImages function
 if __name__ == "__main__":
+
+    # set the working directory to the directory of the script
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
+    # Create scan_output directory if it doesn't exist
+    os.makedirs("scan_output", exist_ok=True)
+    
+    # remove the templog.txt file if it exists
+    if os.path.exists("scan_output/templog.txt"):
+        os.remove("scan_output/templog.txt")
+    # now create it again as an empty file
+    with open("scan_output/templog.txt", "w"):
+        pass
     getImages(Queue(), 2, 0.25)
