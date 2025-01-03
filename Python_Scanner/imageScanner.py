@@ -26,6 +26,10 @@ from validMetadata import (
 debug = False
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
+# set the path to the tesseract-ocr folder
+tesseract_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Tesseract-OCR") + "\\tesseract.exe"
+pytesseract.pytesseract.tesseract_cmd = tesseract_path
+
 
 def resource_path(relative_path):
     """Get absolute path to resource, works for dev and for PyInstaller"""
@@ -87,7 +91,7 @@ def drive_rarity_from_max_level(max_level):
 def scan_image(image_path):
     # default_config = "--oem 1 -l eng"
     # old_config = "--oem 1 -l ZZZ --tessdata-dir ./tessdata"
-    config = "--oem 1 -l eng"  # force NN+LSTM finetuned model
+    config = "--oem 1 -l eng --psm 6"  # force NN+LSTM finetuned model
     try:
         text = pytesseract.image_to_string(image_path, config=config)
     except Exception as e:
@@ -108,12 +112,15 @@ def extract_metadata(result_text, image_path):
     drive_level = find_string_in_list(
         "/", result_text
     )  # might swap back to "Lv." if this is too permissive
+    # clean out any text other than numbers and slashes and trim the string
+    drive_level = re.sub("[^0-9/]", "", drive_level).strip()
     drive_max_level = drive_level.split("/")[1].strip()
     drive_current_level = re.sub("\D", "", drive_level.split("/")[0])
     # convert a current level of 00 to 0, etc
     if drive_current_level[0] == "0":
         drive_current_level = "0"
-    drive_base_stat_combined = result_text[find_index_in_list("Base", result_text) + 1]
+    # base stat is found after the "Main Stat" line
+    drive_base_stat_combined = result_text[find_index_in_list("Main", result_text) + 1]
 
     drive_base_stat = re.sub("[\d%]", "", drive_base_stat_combined).strip()
 
@@ -132,12 +139,12 @@ def extract_metadata(result_text, image_path):
         ).group()
 
     # the random stats of the drive should be stored as a pair, with the stat name and its value
-    # they are found in the text after the "Random Stats" line and before the "Set Effect" line
+    # they are found in the text after the "Sub-Stats" line and before the "Set Effect" line
     # each name has its value right after it, so we can iterate through the text and add the values to the array
     random_stats = []
     already_used_indexes = []
     for i in range(
-        find_index_in_list("Random", result_text) + 1,
+        find_index_in_list("Sub", result_text) + 1,
         find_index_in_list("Set", result_text),
     ):
 
@@ -154,7 +161,7 @@ def extract_metadata(result_text, image_path):
             # (search each line for a match until we find one or reach the end)
             cur_random_stat_name = cur_random_stat_name.group()
             for j in range(
-                find_index_in_list("Random", result_text) + 1, len(result_text)
+                find_index_in_list("Sub", result_text) + 1, len(result_text)
             ):
                 cur_random_stat_value = None
                 if (
@@ -198,7 +205,7 @@ def find_closest_stat(
     closest_stat_similarity = 0
     for valid_stat in valid_stats:
         similarity = cosine.similarity(stat, valid_stat)
-        if similarity > closest_stat_similarity:
+        if similarity >= closest_stat_similarity:
             closest_stat_similarity = similarity
             closest_stat = valid_stat
 
@@ -288,7 +295,9 @@ def correct_metadata(metadata):
         # expected sub stats are in a list of (stat_name, stat_value) tuples
         expected_sub_stats_names = [stat[0] for stat in expected_sub_stat_values]
         corrected_sub_stats_ignore_list = []
-        for sub_stat_name, sub_stat_value in metadata["random_stats"]:
+        
+        # Keep track of which stats we've seen to handle duplicates
+        for i, (sub_stat_name, sub_stat_value) in enumerate(metadata["random_stats"]):
             old_sub_stat_name = sub_stat_name
             if any(keyword in sub_stat_name for keyword in ["HP", "ATK", "DEF"]):
                 if "%" in sub_stat_value:
@@ -310,23 +319,13 @@ def correct_metadata(metadata):
                 expected_sub_stat_value = find_string_in_list(
                     sub_stat_name, expected_sub_stat_values
                 )[1]
-                if ("%" in sub_stat_value or "CRIT" in sub_stat_name) and not any(
-                    keyword in sub_stat_name for keyword in ["PEN", "Anomaly"]
-                ):
-                    expected_sub_stat_value = str(expected_sub_stat_value) + "%"
-                if sub_stat_value != expected_sub_stat_value:
+                
+                if sub_stat_value.replace("%", "") != expected_sub_stat_value.replace("%", ""):
                     logging.warning(
                         f"Corrected sub stat {sub_stat_name} value {sub_stat_value} to {expected_sub_stat_value}"
                     )
-                    # update the sub stat value to the expected value
-                    sub_stat_index = find_index_in_list(
-                        old_sub_stat_name,
-                        metadata["random_stats"],
-                        corrected_sub_stats_ignore_list,
-                    )
-                    # add the index to the ignore list so we don't double correct it
-                    corrected_sub_stats_ignore_list.append(sub_stat_index)
-                    metadata["random_stats"][sub_stat_index] = (
+                    # Update the stat at the current index
+                    metadata["random_stats"][i] = (
                         old_sub_stat_name,
                         expected_sub_stat_value,
                     )
@@ -335,6 +334,7 @@ def correct_metadata(metadata):
                 raise ValueError(
                     f"Sub stat {sub_stat_name} not found in expected sub stats"
                 )
+
     except Exception as e:
         print("Error while correcting sub stats, proceeding uncorrected: ", e)
         logging.WARNING(
@@ -416,8 +416,8 @@ def imageScanner(queue: Queue):
 if __name__ == "__main__":
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     # test the scanner on a single image
-    save_path = resource_path("./scan_output/Partition3Scan4.png")
-    image_path = resource_path("./scan_input/Partition3Scan4.png")
+    save_path = resource_path("./scan_output/Partition2Scan7.png")
+    image_path = resource_path("./scan_input/Partition2Scan7.png")
     setup_logging()
     processed_image = preprocess_image(
         image_path, save_path=save_path, target_images_folder="./Target_Images"

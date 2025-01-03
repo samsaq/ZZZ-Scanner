@@ -18,73 +18,48 @@ def preprocess_image(
         gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
     )
 
-    # clean up the image
-    # remove rarity icons
-    s_rank_icon = cv2.imread(
-        os.path.join(target_images_folder, "zzz-disk-drive-S-icon.png"),
-        cv2.IMREAD_GRAYSCALE,
-    )
-    a_rank_icon = cv2.imread(
-        os.path.join(target_images_folder, "zzz-disk-drive-A-icon.png"),
-        cv2.IMREAD_GRAYSCALE,
-    )
-    b_rank_icon = cv2.imread(
-        os.path.join(target_images_folder, "zzz-disk-drive-B-icon.png"),
-        cv2.IMREAD_GRAYSCALE,
-    )
+    # Define icon paths for both resolutions
+    rank_icons = {
+        'S': ['zzz-disk-drive-S-icon.png', 'zzz-disk-drive-S-icon-1080p.png'],
+        'A': ['zzz-disk-drive-A-icon.png', 'zzz-disk-drive-A-icon-1080p.png'],
+        'B': ['zzz-disk-drive-B-icon.png', 'zzz-disk-drive-B-icon-1080p.png']
+    }
 
-    # see if any of the rarity icons are in the image (there should only be one instance of one of them)
-    try:
-        s_rank_match = cv2.matchTemplate(
-            binary_image, s_rank_icon, cv2.TM_CCOEFF_NORMED
-        )
-        a_rank_match = cv2.matchTemplate(
-            binary_image, a_rank_icon, cv2.TM_CCOEFF_NORMED
-        )
-        b_rank_match = cv2.matchTemplate(
-            binary_image, b_rank_icon, cv2.TM_CCOEFF_NORMED
-        )
-    except cv2.error:
-        s_rank_match = None
-        a_rank_match = None
-        b_rank_match = None
+    # Load and match all icon variants
+    best_match = {'score': 0, 'icon': None, 'loc': None, 'match_result': None}
+    
+    for rank, icon_files in rank_icons.items():
+        for icon_file in icon_files:
+            icon = cv2.imread(
+                os.path.join(target_images_folder, icon_file),
+                cv2.IMREAD_GRAYSCALE,
+            )
+            
+            try:
+                match_result = cv2.matchTemplate(
+                    binary_image, icon, cv2.TM_CCOEFF_NORMED
+                )
+                max_val = cv2.minMaxLoc(match_result)[1]
+                
+                if max_val > rarity_icon_threshold and max_val > best_match['score']:
+                    best_match = {
+                        'score': max_val,
+                        'icon': icon,
+                        'loc': cv2.minMaxLoc(match_result)[3],
+                        'match_result': match_result
+                    }
+            except cv2.error:
+                continue
 
     rank_match = None
+    # If we found a match above threshold, black out the icon area
+    if best_match['icon'] is not None:
+        binary_image[
+            best_match['loc'][1] : best_match['loc'][1] + best_match['icon'].shape[0],
+            best_match['loc'][0] : best_match['loc'][0] + best_match['icon'].shape[1],
+        ] = 0
+        rank_match = best_match['match_result']  # Store the actual template matching result
 
-    # if any of the icons are found, set their area black
-    if (
-        cv2.minMaxLoc(s_rank_match)[1] > rarity_icon_threshold
-        and s_rank_match is not None
-    ):
-        binary_image[
-            cv2.minMaxLoc(s_rank_match)[3][1] : cv2.minMaxLoc(s_rank_match)[3][1]
-            + s_rank_icon.shape[0],
-            cv2.minMaxLoc(s_rank_match)[3][0] : cv2.minMaxLoc(s_rank_match)[3][0]
-            + s_rank_icon.shape[1],
-        ] = 0
-        rank_match = s_rank_match
-    if (
-        cv2.minMaxLoc(a_rank_match)[1] > rarity_icon_threshold
-        and a_rank_match is not None
-    ):
-        binary_image[
-            cv2.minMaxLoc(a_rank_match)[3][1] : cv2.minMaxLoc(a_rank_match)[3][1]
-            + a_rank_icon.shape[0],
-            cv2.minMaxLoc(a_rank_match)[3][0] : cv2.minMaxLoc(a_rank_match)[3][0]
-            + a_rank_icon.shape[1],
-        ] = 0
-        rank_match = a_rank_match
-    if (
-        cv2.minMaxLoc(b_rank_match)[1] > rarity_icon_threshold
-        and b_rank_match is not None
-    ):
-        binary_image[
-            cv2.minMaxLoc(b_rank_match)[3][1] : cv2.minMaxLoc(b_rank_match)[3][1]
-            + b_rank_icon.shape[0],
-            cv2.minMaxLoc(b_rank_match)[3][0] : cv2.minMaxLoc(b_rank_match)[3][0]
-            + b_rank_icon.shape[1],
-        ] = 0
-        rank_match = b_rank_match
     # remove agent icons
     # this should be done without recognition, as we don't know what the agent icons look like
     # the position of the agent icons can be done by enlarging the bounding box of the rarity icons
@@ -96,15 +71,15 @@ def preprocess_image(
 
     # calculate the agent icon bounding box
     if rank_match is not None:
-        agent_icon_y = cv2.minMaxLoc(rank_match)[3][1] + agent_icon_y_offset
-        agent_icon_width = int(s_rank_icon.shape[1] * agent_icon_size_modifier)
-        agent_icon_height = int(s_rank_icon.shape[0] * agent_icon_size_modifier)
+        agent_icon_y = best_match['loc'][1] + agent_icon_y_offset
+        agent_icon_width = int(best_match['icon'].shape[1] * agent_icon_size_modifier)
+        agent_icon_height = int(best_match['icon'].shape[0] * agent_icon_size_modifier)
 
         # now push the agent icon bounding box to the right edge of the image
         agent_icon_x = binary_image.shape[1] - agent_icon_width
 
         # adjust the y offset so that the bounding box is centered on the same y position
-        agent_icon_y = agent_icon_y - (agent_icon_height - s_rank_icon.shape[0]) // 2
+        agent_icon_y = agent_icon_y - (agent_icon_height - best_match['icon'].shape[0]) // 2
 
         # set the agent icon bounding box to black
         binary_image[

@@ -381,7 +381,7 @@ def validate_sub_stat_value(sub_stats, sub_stats_progression):
         sub_stat_name, sub_stat_value = sub_stats[i]
         if "%" in sub_stat_value:
             sub_stat_value = sub_stat_value.split("%")[0]
-            percent_removed_sub_stats.append((sub_stat_name, sub_stat_value))
+            percent_removed_sub_stats.append((sub_stat_name, sub_stat_value, i))
             if any(
                 keyword in sub_stat_name for keyword in ["ATK", "HP", "DEF"]
             ):  # these three have % versions
@@ -438,12 +438,39 @@ def validate_sub_stat_value(sub_stats, sub_stats_progression):
             return (False, "Sub stat value does not match expected value")
 
     # add the percentage sign back to the sub stat names that had it removed and convert them back to strings
-    for i in range(len(percent_removed_sub_stats)):
-        # find the matching sub stat in sub_stats and add the % sign back
-        sub_stat_name, sub_stat_value = percent_removed_sub_stats[i]
-        for j in range(len(sub_stats)):
-            if sub_stats[j][0].replace("%", "") == sub_stat_name:
-                sub_stats[j] = (sub_stat_name, str(sub_stat_value) + "%")
+    for sub_stat_name, sub_stat_value, original_index in percent_removed_sub_stats:
+        # Use the stored index to directly update the correct sub stat
+        sub_stats[original_index] = (sub_stat_name, str(sub_stat_value) + "%")
+
+    # if we have two of the same stat (eg: ATK or HP or DEF), we need to check if one is percentage and the other is not
+    # since we can't have two of the same stat that are percentage or not percentage, only one of each can exist if we have two of the same stat
+    # Check for duplicate stats
+    stat_counts = {}
+    for sub_stat_name, _ in sub_stats:
+        # Remove any +N suffix and % for comparison
+        base_name = sub_stat_name.split("+")[0].replace("%", "")
+        if base_name not in stat_counts:
+            stat_counts[base_name] = 1
+        else:
+            stat_counts[base_name] += 1
+
+    # Check each stat that appears multiple times
+    for stat_name, count in stat_counts.items():
+        if any(keyword in stat_name for keyword in ["ATK", "HP", "DEF"]):
+            if count > 2:
+                return (False, f"More than 2 instances of {stat_name} found")
+            elif count == 2:
+                # Get both instances of this stat, including their original names with % if present
+                instances = [(name, value) for name, value in sub_stats 
+                           if name.split("+")[0].replace("%", "") == stat_name]
+                # Check if exactly one has a % in the value and one doesn't
+                has_percent = sum(1 for _, value in instances if "%" in str(value))
+                if has_percent != 1:
+                    return (False, f"When {stat_name} appears twice, one must be percentage and one must not be")
+        else:
+            # For non ATK/HP/DEF stats, no duplicates allowed at all
+            if count > 1:
+                return (False, f"Stat {stat_name} cannot have duplicates")
 
     return (True, "")
 
@@ -496,6 +523,24 @@ def get_expected_sub_stat_values(sub_stats, sub_stats_progression):
                     base_value = value
                     break
             expected_value = base_value
+
+            # For ATK/HP/DEF stats, determine if this should be percentage based on other instances
+            if any(keyword in sub_stat_name for keyword in ["ATK", "HP", "DEF"]):
+                base_name = sub_stat_name.split("+")[0].replace("%", "")  # Remove any existing % for clean comparison
+                other_instances = [(n, v) for n, v in sub_stats if n.split("+")[0].replace("%", "") == base_name]
+                
+                # If we have two instances, one must be percentage and one must be flat
+                if len(other_instances) == 2:
+                    # Find the instance that has a value
+                    other_value = next((v for n, v in other_instances if v and v != sub_stat_value), None)
+                    if other_value:
+                        # If the other value is a percentage, this one should be flat (and vice versa)
+                        should_be_percentage = "%" not in other_value
+                        if should_be_percentage:
+                            expected_value = str(expected_value) + "%"
+                elif "%" in sub_stat_value:  # Single instance case
+                    expected_value = str(expected_value) + "%"
+
         expected_sub_stats.append((sub_stat_name, str(expected_value)))
     return expected_sub_stats
 
