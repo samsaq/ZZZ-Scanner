@@ -148,3 +148,23 @@ if __name__ == "__main__":
     print("Get Images Time: ", GetImagesEndTime - GetImagesStartTime)
     print("Image Scanner Time: ", imageScannerEndTime - imageScannerStartTime)
     print("Overall Time: ", time.time() - overallStartTime)
+
+
+    log_path = os.path.join("Python_Scanner", "scan_output", "log.txt")
+    # Calculate error rate
+    if os.path.exists(log_path):
+        try:
+            with open(log_path, "r") as file:
+                log_lines = file.readlines()
+                print(f"Successfully read {len(log_lines)} lines from log file")
+                error_count = sum('ERROR' in line for line in log_lines)
+                info_count = sum('INFO - Processing' in line for line in log_lines)
+                if info_count > 0:
+                    error_rate = error_count / info_count * 100
+                    print(f"Error Rate: {error_rate:.2f}% ({error_count} errors out of {info_count} scans)")
+                else:
+                    print("No scans were processed - cannot calculate error rate")
+        except Exception as e:
+            print(f"Error reading log file: {str(e)}")
+    else:
+        print("No log file found - cannot calculate error rate")

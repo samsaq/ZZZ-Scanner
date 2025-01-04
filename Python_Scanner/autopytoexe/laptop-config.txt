@@ -1,0 +1,4 @@
+While in venv (see requirements.txt)
+Make sure to hit the pyinstaller directly in the venv (otherwise it will miss modules and error)
+From within the Python_Scanner folder
+.\scannerVenv\Scripts\pyinstaller.exe --noconfirm --onedir --console --icon "C:\Users\samee\OneDrive\Documents\GitHub\ZZZ-Drive-Disk-Scanner\ZZZ-Frontend\renderer\public\images\ZZZ-Scanner-Icon.ico" --name "ZZZ-Scanner-Tesseract" --manifest "C:\Users\samee\OneDrive\Documents\GitHub\ZZZ-Drive-Disk-Scanner\Python_Scanner\autopytoexe\manifest.xml" --uac-admin --add-data "C:\Users\samee\OneDrive\Documents\GitHub\ZZZ-Drive-Disk-Scanner\Python_Scanner\Target_Images;Target_Images/" --add-data "C:\Users\samee\OneDrive\Documents\GitHub\ZZZ-Drive-Disk-Scanner\Python_Scanner\Tesseract-OCR;Tesseract-OCR/"  "C:\Users\samee\OneDrive\Documents\GitHub\ZZZ-Drive-Disk-Scanner\Python_Scanner\orchestrator.py"

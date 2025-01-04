@@ -1,0 +1,77 @@
+{
+ "version": "auto-py-to-exe-configuration_v1",
+ "pyinstallerOptions": [
+  {
+   "optionDest": "noconfirm",
+   "value": true
+  },
+  {
+   "optionDest": "filenames",
+   "value": "C:/Users/samee/OneDrive/Documents/GitHub/ZZZ-Drive-Disk-Scanner/Python_Scanner/orchestrator.py"
+  },
+  {
+   "optionDest": "onefile",
+   "value": false
+  },
+  {
+   "optionDest": "console",
+   "value": true
+  },
+  {
+   "optionDest": "icon_file",
+   "value": "C:/Users/samee/OneDrive/Documents/GitHub/ZZZ-Drive-Disk-Scanner/ZZZ-Frontend/renderer/public/images/ZZZ-Scanner-Icon.ico"
+  },
+  {
+   "optionDest": "name",
+   "value": "ZZZ-Scanner-Tesseract"
+  },
+  {
+   "optionDest": "clean_build",
+   "value": false
+  },
+  {
+   "optionDest": "strip",
+   "value": false
+  },
+  {
+   "optionDest": "noupx",
+   "value": false
+  },
+  {
+   "optionDest": "disable_windowed_traceback",
+   "value": false
+  },
+  {
+   "optionDest": "manifest",
+   "value": "C:/Users/samee/OneDrive/Documents/GitHub/ZZZ-Drive-Disk-Scanner/Python_Scanner/autopytoexe/manifest.xml"
+  },
+  {
+   "optionDest": "uac_admin",
+   "value": true
+  },
+  {
+   "optionDest": "uac_uiaccess",
+   "value": false
+  },
+  {
+   "optionDest": "argv_emulation",
+   "value": false
+  },
+  {
+   "optionDest": "bootloader_ignore_signals",
+   "value": false
+  },
+  {
+   "optionDest": "datas",
+   "value": "C:/Users/samee/OneDrive/Documents/GitHub/ZZZ-Drive-Disk-Scanner/Python_Scanner/Target_Images;Target_Images/"
+  },
+  {
+   "optionDest": "datas",
+   "value": "C:/Users/samee/OneDrive/Documents/GitHub/ZZZ-Drive-Disk-Scanner/Python_Scanner/Tesseract-OCR;Tesseract-OCR/"
+  }
+ ],
+ "nonPyinstallerOptions": {
+  "increaseRecursionLimit": true,
+  "manualArguments": ""
+ }
+}

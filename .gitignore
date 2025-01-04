@@ -1,4 +1,15 @@
 __pycache__/
 Python_Scanner/scan_output/
 Python_Scanner/scan_input/
-output/
+Python_Scanner/output/
+Python_Scanner/build/
+Python_Scanner/dist/
+Python_Scanner/OCRvenv
+Python_Scanner/scannerVenv
+Python_Scanner/Tesseract-OCR
+Python_Scanner/Tesseract/input_images
+Python_Scanner/Tesseract/input_images_preprocessed
+Python_Scanner/Tesseract/training_data/box_files
+Python_Scanner/Tesseract/training_data/sub_images
+Python_Scanner/Tesseract/training_data/txt_truths
+Python_Scanner/Tesseract/training_data/training_data_generation.log
