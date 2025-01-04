@@ -11,7 +11,8 @@ files:
       - app
 extraFiles:
   - from: ZZZ-Scanner-Tesseract
-    to: ZZZ-Scanner-Tesseract
+    to: resources/ZZZ-Scanner-Tesseract
 publish: null
-win: 
-  requestedExecutionLevel: 'requireAdministrator'
+win:
+  requestedExecutionLevel: "requireAdministrator"
+  icon: "renderer/public/images/ZZZ-Scanner-Icon.ico"

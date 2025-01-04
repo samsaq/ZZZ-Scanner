@@ -42,8 +42,12 @@
    "value": false
   },
   {
+   "optionDest": "manifest",
+   "value": "C:/Users/samee/OneDrive/Documents/GitHub/ZZZ-Drive-Disk-Scanner/Python_Scanner/autopytoexe/manifest.xml"
+  },
+  {
    "optionDest": "uac_admin",
-   "value": false
+   "value": true
   },
   {
    "optionDest": "uac_uiaccess",

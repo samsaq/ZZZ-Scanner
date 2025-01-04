@@ -2,11 +2,11 @@
 
 
 a = Analysis(
-    ['C:\\Users\\samsaq\\Documents\\GitHub\\ZZZ-Drive-Disk-Scanner\\Python_Scanner\\orchestrator.py'],
+    ['C:\\Users\\samee\\OneDrive\\Documents\\GitHub\\ZZZ-Drive-Disk-Scanner\\Python_Scanner\\orchestrator.py'],
     pathex=[],
     binaries=[],
-    datas=[('C:\\Users\\samsaq\\Documents\\GitHub\\ZZZ-Drive-Disk-Scanner\\Python_Scanner\\Target_Images', 'Target_Images/')],
-    hiddenimports=['PyTessBaseAPI'],
+    datas=[('C:\\Users\\samee\\OneDrive\\Documents\\GitHub\\ZZZ-Drive-Disk-Scanner\\Python_Scanner\\Target_Images', 'Target_Images/'), ('C:\\Users\\samee\\OneDrive\\Documents\\GitHub\\ZZZ-Drive-Disk-Scanner\\Python_Scanner\\Tesseract-OCR', 'Tesseract-OCR/')],
+    hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -32,7 +32,9 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['C:\\Users\\samsaq\\Documents\\GitHub\\ZZZ-Drive-Disk-Scanner\\ZZZ-Frontend\\renderer\\public\\images\\ZZZ-Scanner-Icon.ico'],
+    uac_admin=True,
+    icon=['C:\\Users\\samee\\OneDrive\\Documents\\GitHub\\ZZZ-Drive-Disk-Scanner\\ZZZ-Frontend\\renderer\\public\\images\\ZZZ-Scanner-Icon.ico'],
+    manifest='C:\\Users\\samee\\OneDrive\\Documents\\GitHub\\ZZZ-Drive-Disk-Scanner\\Python_Scanner\\autopytoexe\\manifest.xml',
 )
 coll = COLLECT(
     exe,

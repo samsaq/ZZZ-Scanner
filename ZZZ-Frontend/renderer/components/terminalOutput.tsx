@@ -18,7 +18,7 @@ export function TerminalOutput({ finalLine }: TerminalOutputProps) {
         inputValue = "Error: try increasing the page load time";
       }
     } else if (finalLine.includes("Writing scan data to file")) {
-      inputValue = "Scan complete";
+      inputValue = "Scan complete - check file explorer";
     }
   }
   return (
