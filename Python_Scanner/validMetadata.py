@@ -14,6 +14,10 @@ valid_set_names = [
     "Inferno Metal",
     "Freedom Blues",
     "Polar Metal",
+    "Astral Voice",
+    "Branch & Blade Song",
+    "Chaos Jazz",
+    "Proto Punk",
 ]
 
 # Disk Partition 1 Main Stats
