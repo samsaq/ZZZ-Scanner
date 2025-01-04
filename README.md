@@ -1,15 +1,13 @@
 # ZZZ-Drive-Disk-Scanner
-An program that scans the drive discs in your backpack in Zenless Zone Zero &amp; saves them for use in a future Zenless Optimizer
 
-# Branch Scope
-- [ ] Build the scanner portion of the project to a working exe that can be used on other computers by the electron app
-- [ ] Add & Test support for 1080p
-* Integrate tesseract in order to remove   need for CUDA & GPU acceleration
-  - [ ] Remove use of easyocr and paddleocr
-  - [x] Preprocess scanned images for tesseract
-  * Fine tune a tesseract model for disc drive analysis
-    * Create a worflow to generate, manually review, and integrate training data
-      - [x] Generate line images and ground truth files using easyocr to later verify
-       - [x] Generate synthetic line images and ground truth files for set name lines to prevent set name memorization and preclude later retraining
-      - [x] Create a program to help manually review training data
-      - [ ] Automate all of the above together, as much as possible
+A program that scans your drive discs in [Zenless Zone Zero](https://zenless.hoyoverse.com/) & saves them for use in the [Zenless Optimizer](https://github.com/samsaq/ZZZ-Drive-Disk-Optimizer)
+
+## How to use
+
+Download the latest portable zip or installer from the releases page and use the .exe from there. You might need to alter the page load speed (time waited for the equipment screen to load) or disk scan speed (time waited in between taking snapshots of disks so that the game can load the next one) if your computer is a little slow.
+
+Once you click the start scan button **DON'T TOUCH ANYTHING** until the scanner finishes moving - it'll break the scan otherwise and you'll need to restart. Once it does, alt tab back to the scanner & the file explorer window opened with the scan_data.json file you'll upload to the [Zenless Optimizer](https://github.com/samsaq/ZZZ-Drive-Disk-Optimizer) to analyze.
+
+## Compatibility
+
+The scanner is just for PC, and works on **1080p and 1440p screens**. If anyone wants support for their resolution, they can send me a few UI images in their resolution (see the Python Scanner's Target Images folder) for me to use, or get them and edit the getImages.py file to use the new resolution's images (as is already done for 1080p and 1440p) and submit a PR.
