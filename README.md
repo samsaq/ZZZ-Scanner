@@ -10,4 +10,4 @@ Once you click the start scan button **DON'T TOUCH ANYTHING** until the scanner 
 
 ## Compatibility
 
-The scanner is just for PC, and works on **1080p and 1440p screens**. If anyone wants support for their resolution, they can send me a few UI images in their resolution (see the Python Scanner's Target Images folder) for me to use, or get them and edit the getImages.py file to use the new resolution's images (as is already done for 1080p and 1440p) and submit a PR.
+The scanner is just for PC, and works on **1080p and 1440p screens**. If you want support for another resolution, you can send me a few UI images snipped from ZZZ at fullscreen at that resolution (see the Python Scanner's Target Images folder) for me to use, or get them and edit the getImages.py file to use the new resolution's images (as is already done for 1080p and 1440p) and submit a PR.

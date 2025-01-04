@@ -2,7 +2,7 @@
   "private": true,
   "name": "ZZZ-Scanner",
   "description": "A program built to scan disk drives in Zenless Zone Zero and convert them to a json file",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "samsaq <https://github.com/samsaq/>",
   "main": "app/background.js",
   "scripts": {
