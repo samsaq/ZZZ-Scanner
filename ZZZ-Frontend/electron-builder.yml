@@ -16,3 +16,7 @@ publish: null
 win:
   requestedExecutionLevel: "requireAdministrator"
   icon: "renderer/public/images/ZZZ-Scanner-Icon.ico"
+
+nsis:
+  installerIcon: "renderer/public/images/ZZZ-Scanner-Icon.ico"
+  uninstallerIcon: "renderer/public/images/ZZZ-Scanner-Icon.ico"
