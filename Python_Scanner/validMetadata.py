@@ -1,5 +1,63 @@
 # a file that contains metadata to check against for the image scanner
 
+valid_weapon_names = [
+    "[Lunar] Pleniluna",
+    "[Lunar] Noviluna",
+    "[Lunar] Decrescent",
+    "Street Superstar",
+    "Starlight Engine Replica",
+    "Marcato Desire",
+    "Housekeeper",
+    "Gilded Blossom",
+    "Drill Rig - Red Axis",
+    "Cannon Rotor",
+    "Zanshin Herb Case",
+    "The Brimstone",
+    "Steel Cushion",
+    "Riot Suppressor Mark VI",
+    "Deep Sea Visitor",
+    "[Magnetic Storm] Charlie",
+    "[Magnetic Storm] Bravo",
+    "[Magnetic Storm] Alpha",
+    "Weeping Gemini",
+    "Roaring Ride",
+    "Rainforest Gourmet",
+    "Electro-Lip Gloss",
+    "Timeweaver",
+    "Sharpened Stinger",
+    "Hailstorm Shrine",
+    "Fusion Compiler",
+    "Flamemaker Shaker",
+    "[Identity] Inflection",
+    "[Identity] Base",
+    "Spring Embrace",
+    "Peacekeeper - Specialized",
+    "Original Transmorpher",
+    "Bunny Band",
+    "Big Cylinder",
+    "Tusks of Fury",
+    "[Vortex] Revolver",
+    "[Vortex] Hatchet",
+    "[Vortex] Arrow",
+    "Steam Oven",
+    "Six Shooter",
+    "Precious Fossilized Core",
+    "Demara Battery Mark II",
+    "The Restrained",
+    "Ice-Jade Teapot",
+    "Hellfire Gears",
+    "Blazing Laurel",
+    "[Reverb] Mark III",
+    "[Reverb] Mark II",
+    "[Reverb] Mark I",
+    "Unfettered Game Ball",
+    "The Vault",
+    "Slice of Time",
+    "Kaboom the Cannon",
+    "Bashful Demon",
+    "Weeping Cradle",
+]
+
 # valid disk drive set names
 valid_set_names = [
     "Swing Jazz",
@@ -465,12 +523,18 @@ def validate_sub_stat_value(sub_stats, sub_stats_progression):
                 return (False, f"More than 2 instances of {stat_name} found")
             elif count == 2:
                 # Get both instances of this stat, including their original names with % if present
-                instances = [(name, value) for name, value in sub_stats 
-                           if name.split("+")[0].replace("%", "") == stat_name]
+                instances = [
+                    (name, value)
+                    for name, value in sub_stats
+                    if name.split("+")[0].replace("%", "") == stat_name
+                ]
                 # Check if exactly one has a % in the value and one doesn't
                 has_percent = sum(1 for _, value in instances if "%" in str(value))
                 if has_percent != 1:
-                    return (False, f"When {stat_name} appears twice, one must be percentage and one must not be")
+                    return (
+                        False,
+                        f"When {stat_name} appears twice, one must be percentage and one must not be",
+                    )
         else:
             # For non ATK/HP/DEF stats, no duplicates allowed at all
             if count > 1:
@@ -530,13 +594,22 @@ def get_expected_sub_stat_values(sub_stats, sub_stats_progression):
 
             # For ATK/HP/DEF stats, determine if this should be percentage based on other instances
             if any(keyword in sub_stat_name for keyword in ["ATK", "HP", "DEF"]):
-                base_name = sub_stat_name.split("+")[0].replace("%", "")  # Remove any existing % for clean comparison
-                other_instances = [(n, v) for n, v in sub_stats if n.split("+")[0].replace("%", "") == base_name]
-                
+                base_name = sub_stat_name.split("+")[0].replace(
+                    "%", ""
+                )  # Remove any existing % for clean comparison
+                other_instances = [
+                    (n, v)
+                    for n, v in sub_stats
+                    if n.split("+")[0].replace("%", "") == base_name
+                ]
+
                 # If we have two instances, one must be percentage and one must be flat
                 if len(other_instances) == 2:
                     # Find the instance that has a value
-                    other_value = next((v for n, v in other_instances if v and v != sub_stat_value), None)
+                    other_value = next(
+                        (v for n, v in other_instances if v and v != sub_stat_value),
+                        None,
+                    )
                     if other_value:
                         # If the other value is a percentage, this one should be flat (and vice versa)
                         should_be_percentage = "%" not in other_value

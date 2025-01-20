@@ -6,6 +6,7 @@ import logging
 from keyboard import press
 from multiprocessing import Queue
 
+
 # screen resolutions supported enum
 class ScreenResolution:
     RES_1440P = (2560, 1440)
@@ -36,10 +37,15 @@ def setup_logging(log_file_path):
 screenWidth, screenHeight = pyautogui.size()
 
 # get the screen resolution enum
-screenResolution = ScreenResolution.RES_1440P if screenWidth == 2560 else ScreenResolution.RES_1080P
+screenResolution = (
+    ScreenResolution.RES_1440P if screenWidth == 2560 else ScreenResolution.RES_1080P
+)
 
 
 def switchToZZZ():
+    """
+    Switch to the Zenless Zone Zero game window
+    """
     logging.info("Switching to ZenlessZoneZero")
     ZZZWindow = pyautogui.getWindowsWithTitle("ZenlessZoneZero")[0]
     if ZZZWindow.isActive == False:
@@ -51,6 +57,13 @@ def switchToZZZ():
 
 
 def getToEquipmentScreen(queue: Queue, pageLoadTime):
+    """
+    Get to the equipment screen from the character screen
+
+    Args:
+        queue (Queue): Queue to send screenshots to for processing. Defaults to None. Also used to signal the end of the image collection via error message
+        pageLoadTime (float): The time to wait for the page to load
+    """
     logging.info("Getting to the equipment screen")
     # press c to get to the character screen
     press("c")
@@ -64,7 +77,6 @@ def getToEquipmentScreen(queue: Queue, pageLoadTime):
     if screenResolution == ScreenResolution.RES_1080P:
         target = "./Target_Images/zzz-equipment-button-1080p.png"
 
-
     # press the equipment button to get to the equipment screen
     try:
         equipmentButton = pyautogui.locateOnScreen(target, confidence=0.8)
@@ -75,7 +87,9 @@ def getToEquipmentScreen(queue: Queue, pageLoadTime):
     if equipmentButton == None:
         logging.error("Equipment button not found")
         print("Equipment button not found")
-        queue.put("Error")  # cause the process to end early
+        queue.put(
+            "Error - failed to get to the equipment screen"
+        )  # cause the process to end early
         sys.exit(1)
     pyautogui.click(equipmentButton)
     # wait for the equipment screen to load
@@ -139,8 +153,8 @@ def scanPartition(partitionNumber, queue: Queue, discScanTime):
     startPosition = (0.075 * screenWidth, 0.15 * screenHeight)  # start top left
     distanceBetwenColumns = 0.07 * screenWidth
     distanceBetwenRows = 0.158
-    columnNumber = 4  # in 1440p, we have 4 columns
-    rowNumber = 5  # in 1440p, we have 5 rows
+    columnNumber = 4
+    rowNumber = 5
     endOfDiskDrives = scanForEndOfDiskDrives(distanceBetwenRows)
 
     pyautogui.moveTo(startPosition)
@@ -161,11 +175,11 @@ def scanPartition(partitionNumber, queue: Queue, discScanTime):
             discScanTime,
             scanNumber,
         )
-        
+
         endOfDiskDrives = scanForEndOfDiskDrives(distanceBetwenRows)
         if endOfDiskDrives:
             break  # Exit after scanning the row where we found the end
-            
+
         pyautogui.scroll(-1)
 
     # for loop for the remaining rows on the final page of disk drives
@@ -197,7 +211,7 @@ def scanRow(
     discScanTime,
     scanNumber=1,
 ):
-    #pyautogui.click()
+    # pyautogui.click()
     for i in range(1, columns + 1):
         x = rowStartPosition[0] + (i - 1) * distanceBetwenColumns
         y = rowStartPosition[1]
@@ -222,7 +236,7 @@ def scanRowUntilEndOfDiskDrives(
 ):
     # check the current row for the end of disk drives
     endOfDiskDrives = scanForEndOfDiskDrives(distanceBetwenRows, rowNum)
-    #pyautogui.click()
+    # pyautogui.click()
     for i in range(1, columns + 1):
         x = rowStartPosition[0] + (i - 1) * distanceBetwenColumns
         y = rowStartPosition[1]
@@ -329,16 +343,257 @@ def scanDiskDrive(paritionNumber, queue: Queue, discScanTime, scanNumber=1):
     return scanNumber + 1
 
 
+# WEngine specific functions
+
+
+def switchToWEngineBackpack(pageLoadTime, pressTime=0.15):
+    """
+    Switch to the WEngine backpack view from open world traversal (no menu)
+
+    Args:
+        pageLoadTime (float): The time to wait for the page to load
+        pressTime (float, optional): The time to hold the keypress. Defaults to 0.15.
+    """
+    logging.info("Opening the backpack")
+    pyautogui.keyDown("b")
+    pyautogui.sleep(pressTime)
+    pyautogui.keyUp("b")
+    pyautogui.sleep(pageLoadTime)
+    logging.info("Arrived at WEngine backpack view")
+
+
+def switchToWEngineBackpackFromDisks(pageLoadTime, pressTime=0.15):
+    """
+    Switch to the WEngine backpack view from the disk drive view (within character screen, with a partition selected)
+
+    Args:
+        pageLoadTime (float): The time to wait for the page to load
+        pressTime (float, optional): The time to hold the keypress. Defaults to 0.15.
+    """
+    logging.info("Switching to the WEngine tab in the Backpack")
+
+    logging.info("Exiting from the disk drive view")
+    pyautogui.keyDown("esc")
+    pyautogui.sleep(pressTime)
+    pyautogui.keyUp("esc")
+    pyautogui.sleep(pageLoadTime)
+
+    logging.info("Exiting parition view")
+    pyautogui.keyDown("esc")
+    pyautogui.sleep(pressTime)
+    pyautogui.keyUp("esc")
+    pyautogui.sleep(pageLoadTime)
+
+    logging.info("Exiting character screen")
+    pyautogui.keyDown("esc")
+    pyautogui.sleep(pressTime)
+    pyautogui.keyUp("esc")
+    pyautogui.sleep(pageLoadTime)
+
+    logging.info("Entering Backpack (default tab is WEngine)")
+    pyautogui.keyDown("b")
+    pyautogui.sleep(pressTime)
+    pyautogui.keyUp("b")
+    pyautogui.sleep(pageLoadTime)
+
+    logging.info("Arrived at WEngine backpack view")
+
+
+def getWEngine(outputFile="TestImages/test.png"):
+    """
+    Screenshot the WEngine item and save it to a file
+
+    Args:
+        outputFile (str, optional): The path to save the screenshot to. Defaults to "TestImages/test.png". Will create the directory if it doesn't exist.
+    """
+    targetDir = outputFile.split("/")[0]
+    if targetDir and not os.path.exists(targetDir):
+        os.makedirs(targetDir, exist_ok=True)
+    screenshot = pyautogui.screenshot(
+        region=(
+            int(0.73 * screenWidth),  # left
+            int(0.18 * screenHeight),  # top
+            int(0.23 * screenWidth),  # width
+            int(0.175 * screenHeight),  # height
+        )
+    )
+    screenshot.save(outputFile)
+
+
+# scan the WEngine tab in the backpack
+def getWEngineTab(
+    queue: Queue = None, scanTime: float = 0.25, save_folder: str = "scan_input"
+):
+    """
+    Scans the WEngine tab in the backpack, either sending screenshots to a queue or saving to a folder for examination.
+
+    Args:
+        queue (Queue, optional): Queue to send screenshots to for processing. Defaults to None.
+        scanTime (float, optional): Time to wait between scans. Defaults to 0.25.
+        save_folder (str, optional): Folder to save screenshots to. Defaults to "scan_input". Will create the directory if it doesn't exist.
+
+    Returns:
+        int: The number of items scanned
+        None: If an error occurs
+
+    Raises:
+        ValueError: If neither a queue nor save_folder is provided
+    """
+    if save_folder and not os.path.exists(save_folder):
+        os.makedirs(save_folder)
+
+    if not queue and not save_folder:
+        raise ValueError("Must provide either a queue or save_folder or both")
+
+    startPosition = (0.13 * screenWidth, 0.27 * screenHeight)  # start top left
+    distanceBetweenColumns = 0.075 * screenWidth
+    distanceBetweenRows = 0.165 * screenHeight
+    columnNumber = 8  # vertical columns in the backpack
+    rowNumber = 5  # rows per page
+
+    pyautogui.moveTo(startPosition)
+
+    curRowStart = startPosition
+    scanNumber = 1
+
+    while True:  # Scroll through pages until we hit the end
+        # Scan current row
+        for col in range(columnNumber):
+            currentPos = (
+                curRowStart[0] + (col * distanceBetweenColumns),
+                curRowStart[1],
+            )
+            pyautogui.moveTo(currentPos)
+            pyautogui.click()
+            pyautogui.sleep(scanTime)
+
+            # Take screenshot of the WEngine item
+            if save_folder:
+                getWEngine(os.path.join(save_folder, f"wengine_{scanNumber}.png"))
+            else:
+                getWEngine(f"TestImages/temp_{scanNumber}.png")
+                with open(f"TestImages/temp_{scanNumber}.png", "rb") as f:
+                    queue.put((scanNumber, f.read()))
+                os.remove(f"TestImages/temp_{scanNumber}.png")
+
+            scanNumber += 1
+
+        # Check if we've reached the end of the inventory
+        try:
+            target = "./Target_Images/zzz-inventory-end-scrollbar-1440p.png"
+            if screenResolution == ScreenResolution.RES_1080P:
+                target = "./Target_Images/zzz-inventory-end-scrollbar-1080p.png"
+            endOfInventory = pyautogui.locateOnScreen(
+                target,
+                confidence=0.95,
+            )
+            if endOfInventory:
+                break
+        except:
+            pass
+
+        # Scroll down for next row
+        pyautogui.scroll(-1)
+        pyautogui.sleep(scanTime)
+
+    # Scan remaining rows on the final page
+    for row in range(1, rowNumber):
+        curRowStart = (
+            startPosition[0],
+            startPosition[1] + (row) * distanceBetweenRows,
+        )
+
+        # For each column in the row
+        for col in range(columnNumber):
+            currentPos = (
+                curRowStart[0] + (col * distanceBetweenColumns),
+                curRowStart[1],
+            )
+
+            # Check for empty slot
+            try:
+                target = "./Target_Images/zzz-no-inventory-item-icon-1440p.png"
+                if screenResolution == ScreenResolution.RES_1080P:
+                    target = "./Target_Images/zzz-no-inventory-item-icon-1080p.png"
+                emptySlot = pyautogui.locateOnScreen(
+                    target,
+                    confidence=0.9,
+                    region=(
+                        int(currentPos[0] - 0.08 * screenWidth),
+                        int(currentPos[1] - 0.08 * screenHeight),
+                        int(0.16 * screenWidth),
+                        int(0.16 * screenHeight),
+                    ),
+                )
+                if emptySlot:
+                    return (
+                        scanNumber - 1
+                    )  # Exit  if we find an empty slot since we've reached the end of the inventory
+            except Exception as e:
+                pass
+
+            # Take screenshot if not empty
+            pyautogui.moveTo(currentPos)
+            pyautogui.click()
+            pyautogui.sleep(scanTime)
+
+            if save_folder:
+                getWEngine(os.path.join(save_folder, f"wengine_{scanNumber}.png"))
+            else:
+                getWEngine(f"TestImages/temp_{scanNumber}.png")
+                with open(f"TestImages/temp_{scanNumber}.png", "rb") as f:
+                    queue.put((scanNumber, f.read()))
+                os.remove(f"TestImages/temp_{scanNumber}.png")
+
+            scanNumber += 1
+
+    return scanNumber - 1  # Return total number of items scanned
+
+
 # the main function that will be called to get the images by the orchestrator
-def getImages(queue: Queue, pageLoadTime, discScanTime):
+def getImages(queue: Queue, pageLoadTime, discScanTime, scantype):
+    """
+    Get the images for the specified type of scan
+
+    Args:
+        queue (Queue): Queue to send screenshots to for processing. Also used to signal the end and start of the image collection of each category & by error
+        pageLoadTime (float): The time to wait for the page to load
+        discScanTime (float): The time to wait between scans of the disk drives
+        scantype (str): The type of scan to perform. Can be "all", "wengine", "character", "disk"
+    """
     log_file_path = resource_path("scan_output/templog.txt")
     setup_logging(log_file_path)
     switchToZZZ()
-    getToEquipmentScreen(queue, pageLoadTime)
-    # go through the 6 partitions
-    for i in range(1, 7):
-        selectParition(i)
-        scanPartition(i, queue, discScanTime)
+    if scantype == "Disk":
+        getToEquipmentScreen(queue, pageLoadTime)
+        queue.put("Disk")
+        # go through the 6 partitions
+        for i in range(1, 7):
+            selectParition(i)
+            scanPartition(i, queue, discScanTime)
+    elif scantype == "WEngine":
+        switchToWEngineBackpack(pageLoadTime)
+        queue.put("WEngine")
+        getWEngineTab(queue, discScanTime)
+    elif scantype == "Character":
+        getToEquipmentScreen(queue, pageLoadTime)
+        queue.put("Character")
+        # TODO: implement character scan
+    elif scantype == "All":
+        # get the disk data
+        getToEquipmentScreen(queue, pageLoadTime)
+        queue.put("Disk")
+        # go through the 6 partitions
+        for i in range(1, 7):
+            selectParition(i)
+            scanPartition(i, queue, discScanTime)
+        # get the wengine data
+        queue.put("WEngine")
+        switchToWEngineBackpackFromDisks(pageLoadTime)
+        getWEngineTab(queue, discScanTime)
+        # get the character data
+        queue.put("Character")
+        # TODO: implement character scan
     # put a message in the queue to signal the end of the image collection
     queue.put("Done")
 
@@ -351,7 +606,7 @@ if __name__ == "__main__":
 
     # Create scan_output directory if it doesn't exist
     os.makedirs("scan_output", exist_ok=True)
-    
+
     # remove the templog.txt file if it exists
     if os.path.exists("scan_output/templog.txt"):
         os.remove("scan_output/templog.txt")

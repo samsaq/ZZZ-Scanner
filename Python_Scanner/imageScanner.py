@@ -6,7 +6,7 @@ import json
 import logging
 import pytesseract
 from strsimpy import Cosine  # used for string cosine similarity
-from preprocess_images import preprocess_image
+from preprocess_images import preprocess_image, preprocess_wengine_image
 from validMetadata import (
     valid_set_names,
     valid_partition_1_main_stats,
@@ -16,7 +16,7 @@ from validMetadata import (
     valid_partition_5_main_stats,
     valid_partition_6_main_stats,
     valid_random_stats,
-    percentage_main_stats,
+    valid_weapon_names,
     validate_disk_drive,
     get_expected_main_stat_value,
     get_expected_sub_stat_values,
@@ -27,7 +27,10 @@ debug = False
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 # set the path to the tesseract-ocr folder
-tesseract_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Tesseract-OCR") + "\\tesseract.exe"
+tesseract_path = (
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "Tesseract-OCR")
+    + "\\tesseract.exe"
+)
 pytesseract.pytesseract.tesseract_cmd = tesseract_path
 
 
@@ -198,7 +201,7 @@ def extract_metadata(result_text, image_path):
 
 
 def find_closest_stat(
-    stat, valid_stats
+    stat, valid_stats, plus_modifier=True
 ):  # find the closest stat in the input list to the input stat
     cosine = Cosine(2)
     closest_stat = None
@@ -210,7 +213,7 @@ def find_closest_stat(
             closest_stat = valid_stat
 
     # if the original stat had a plus modifier (eg: +1 at the end), add it and the following number to the corrected stat
-    if "+" in stat:
+    if plus_modifier and "+" in stat:
         closest_stat += stat[stat.index("+") : stat.index("+") + 2]
 
     # if the closest and original stat are different, log it, use string comparison to check since similarity would also catch substat upgrades
@@ -295,7 +298,7 @@ def correct_metadata(metadata):
         # expected sub stats are in a list of (stat_name, stat_value) tuples
         expected_sub_stats_names = [stat[0] for stat in expected_sub_stat_values]
         corrected_sub_stats_ignore_list = []
-        
+
         # Keep track of which stats we've seen to handle duplicates
         for i, (sub_stat_name, sub_stat_value) in enumerate(metadata["random_stats"]):
             old_sub_stat_name = sub_stat_name
@@ -319,8 +322,10 @@ def correct_metadata(metadata):
                 expected_sub_stat_value = find_string_in_list(
                     sub_stat_name, expected_sub_stat_values
                 )[1]
-                
-                if sub_stat_value.replace("%", "") != expected_sub_stat_value.replace("%", ""):
+
+                if sub_stat_value.replace("%", "") != expected_sub_stat_value.replace(
+                    "%", ""
+                ):
                     logging.warning(
                         f"Corrected sub stat {sub_stat_name} value {sub_stat_value} to {expected_sub_stat_value}"
                     )
@@ -342,11 +347,109 @@ def correct_metadata(metadata):
         )
 
 
+# WEngine Specific Functions
+def process_wengine_text(text, preprocess_rank=1):
+    """
+    Processes the text from a wengine screenshot to extract the name and level data
+
+    Args:
+        text (list): The text to process, expected to be the output of scan_image
+        preprocess_rank (int): The rank of the wengine found by the preprocess_wengine_image function, defaults to 1 (lowest)
+
+    Returns:
+        dict: The name, curLevel, maxLevel
+    """
+    # connect all the text array members before the first "Lv." or "XX/XX" form number together as the name
+    if not text:
+        return None
+
+    # Pattern for level (Lv.) and form number (XX/XX)
+    level_pattern = re.compile(r"Lv\.", re.IGNORECASE)
+    number_pattern = re.compile(r"\d+/\d+")
+
+    name_parts = []
+    remaining_parts = []
+
+    for line in text:
+        # If we find either pattern, stop adding to name
+        if level_pattern.search(line) or number_pattern.search(line):
+            remaining_parts.append(line)
+            break
+        name_parts.append(line)
+
+    # Add any remaining lines to remaining_parts
+    remaining_parts.extend(text[len(name_parts) + 1 :])
+
+    # Join name parts with spaces
+    name = " ".join(name_parts).strip()
+
+    # from the remaining_parts, find the first line that contains "XX/XX"
+    level_data_line = None
+    for line in remaining_parts:
+        if number_pattern.search(line):
+            level_data_line = line
+            break
+
+    # split the level info, it comes is "curLevel/maxLevel"
+    level_data = level_data_line.split("/")
+    # remove anything that is not a number to clean up
+    curLevel = re.sub(r"\D", "", level_data[0])
+    maxLevel = re.sub(r"\D", "", level_data[1])
+
+    return {
+        "name": name,
+        "curLevel": curLevel,
+        "maxLevel": maxLevel,
+        "upgrade_rank": preprocess_rank,
+    }
+
+
+def correct_wengine_data(data):
+    """
+    Corrects the wengine data as much as possible
+
+    Args:
+        data (dict): The wengine data to correct, expected to be the output of process_wengine_text
+
+    Returns:
+        dict: The corrected wengine data
+    """
+    maxLevel = int(data["maxLevel"])
+    # maxlevel can only be 10, 20, 30, 40, 50, 60 - correct it to the nearest one
+    if maxLevel not in [10, 20, 30, 40, 50, 60]:
+        data["maxLevel"] = str(round(maxLevel / 10) * 10)
+
+    # curlevel can only between maxlevel-10 and maxlevel
+    curLevel = int(data["curLevel"])
+    if curLevel < maxLevel - 10:
+        curLevel = maxLevel - 10
+    elif curLevel > maxLevel:
+        curLevel = maxLevel
+    data["curLevel"] = curLevel
+
+    # make sure the upgrade rank is between 1 and 5, if it's not, set it to the nearest one
+    if data["upgrade_rank"] not in [1, 2, 3, 4, 5]:
+        data["upgrade_rank"] = round(data["upgrade_rank"])
+
+    # correct the name
+    data["name"] = find_closest_stat(
+        data["name"], valid_weapon_names, plus_modifier=False
+    )
+
+    return data
+
+
+# End of WEngine Specific Functions
+
+
 # the main function that will be called to process the images in orchestrator.py
 def imageScanner(queue: Queue):
     setup_logging()
     # scan through all images in the scan_input folder
-    scan_data = []
+    current_scan_type = None
+    disk_data = []
+    wengine_data = []
+    character_data = []
     imagenum = 0
     consecutive_errors = 0
     logging.info("Ready to process disk drives")
@@ -354,63 +457,108 @@ def imageScanner(queue: Queue):
     while not getImagesDone:
         while not queue.empty():
             image_path = queue.get()
-            if image_path == "Done":
+            # Handle marker strings that indicate scan type
+            if image_path in ["Disk", "WEngine", "Character"]:
+                current_scan_type = image_path
+                continue  # Skip to next item in queue
+            elif image_path == "Done":
                 getImagesDone = True
                 break
-            elif (
-                image_path == "Error"
-            ):  # if the getImages process has crashed, stop the program
-                logging.critical(
-                    "Failed to get to the equipment screen - try increasing the page load time"
-                )
-                sys.exit(1)
-            logging.info(f"Processing disk drive # {imagenum}, at {image_path}")
-            if debug:
-                print(f"Processing {image_path}")
-            try:
-                processed_image = preprocess_image(
-                    image_path, target_images_folder="./Target_Images"
-                )
-                result = scan_image(processed_image)
-                result_metadata = extract_metadata(result, image_path)
-            except Exception as e:
-                logging.error(f"Error analyzing drive #{imagenum}, skipping it: {e}")
-                consecutive_errors += 1
-                # if we have more than 10 consecutive errors, stop the program and log it - probably wrong timing settings
-                if consecutive_errors > 10:
+
+            # Process images based on current scan type
+            if current_scan_type == "Disk":
+                if image_path == "Error - failed to get to the equipment screen":
                     logging.critical(
-                        "Over 10 consecutive errors, stopping the program - try increasing the time between disc drive scans"
+                        "Failed to get to the equipment screen - try increasing the page load time"
                     )
                     sys.exit(1)
-                continue
-            correct_metadata(result_metadata)
-            valid_disk_drive, error_message = validate_disk_drive(
-                result_metadata["set_name"],
-                result_metadata["drive_current_level"],
-                result_metadata["drive_max_level"],
-                result_metadata["partition_number"],
-                result_metadata["drive_base_stat"],
-                result_metadata["drive_base_stat_number"],
-                result_metadata["random_stats"],
-            )
-            if valid_disk_drive:
-                scan_data.append(result_metadata)
-            else:
-                logging.error(
-                    f"Disk drive #{imagenum} failed validation, skipping: {error_message}"
+                logging.info(f"Processing disk drive # {imagenum}, at {image_path}")
+                if debug:
+                    print(f"Processing {image_path}")
+                try:
+                    processed_image = preprocess_image(
+                        image_path, target_images_folder="./Target_Images"
+                    )
+                    result = scan_image(processed_image)
+                    result_metadata = extract_metadata(result, image_path)
+                except Exception as e:
+                    logging.error(
+                        f"Error analyzing drive #{imagenum}, skipping it: {e}"
+                    )
+                    consecutive_errors += 1
+                    # if we have more than 10 consecutive errors, stop the program and log it - probably wrong timing settings
+                    if consecutive_errors > 10:
+                        logging.critical(
+                            "Over 10 consecutive errors, stopping the program - try increasing the time between disc drive scans"
+                        )
+                        sys.exit(1)
+                    continue
+                correct_metadata(result_metadata)
+                valid_disk_drive, error_message = validate_disk_drive(
+                    result_metadata["set_name"],
+                    result_metadata["drive_current_level"],
+                    result_metadata["drive_max_level"],
+                    result_metadata["partition_number"],
+                    result_metadata["drive_base_stat"],
+                    result_metadata["drive_base_stat_number"],
+                    result_metadata["random_stats"],
                 )
-            logging.info(f"Finished processing disk drive #{imagenum}")
-            consecutive_errors = 0
-            imagenum += 1
-            if debug:  # log out the output
-                for key, value in result_metadata.items():
-                    print(f"{key}: {value}")
-                print("--------------------------------------------------")
+                if valid_disk_drive:
+                    disk_data.append(result_metadata)
+                else:
+                    logging.error(
+                        f"Disk drive #{imagenum} failed validation, skipping: {error_message}"
+                    )
+                logging.info(f"Finished processing disk drive #{imagenum}")
+                consecutive_errors = 0
+                imagenum += 1
+                if debug:  # log out the output
+                    for key, value in result_metadata.items():
+                        print(f"{key}: {value}")
+                    print("--------------------------------------------------")
+            elif current_scan_type == "WEngine":
+                logging.info(f"Processing wengine # {imagenum}, at {image_path}")
+                if debug:
+                    print(f"Processing {image_path}")
+                try:
+                    processed_image, found_rank = preprocess_wengine_image(image_path)
+                    result = scan_image(processed_image)
+                    result_metadata = process_wengine_text(
+                        result, preprocess_rank=found_rank
+                    )
+                    result_metadata = correct_wengine_data(result_metadata)
+                    # no point in a validation step since we're correcting the data as much as possible already
+                    # it'd just automatically pass with this level of correction
+                    wengine_data.append(result_metadata)
+                except Exception as e:
+                    logging.error(
+                        f"Error analyzing wengine #{imagenum}, skipping it: {e}"
+                    )
+                    consecutive_errors += 1
+                    # if we have more than 10 consecutive errors, stop the program and log it - probably wrong timing settings
+                    if consecutive_errors > 10:
+                        logging.critical(
+                            "Over 10 consecutive errors, stopping the program - try increasing the time between wengine scans"
+                        )
+                        sys.exit(1)
+                    continue
+                logging.info(f"Finished processing wengine #{imagenum}")
+                consecutive_errors = 0
+                imagenum += 1
+                if debug:  # log out the output
+                    for key, value in result_metadata.items():
+                        print(f"{key}: {value}")
+                    print("--------------------------------------------------")
 
     # write the data to a JSON file for later use inside of the scan_output folder
     logging.info("Finished processing. Writing scan data to file")
+    output_data = {
+        "disk_data": disk_data,
+        "wengine_data": wengine_data,
+        "character_data": character_data,
+    }
     with open("scan_output/scan_data.json", "w") as f:
-        json.dump(scan_data, f, indent=4)
+        json.dump(output_data, f, indent=4)
 
 
 if __name__ == "__main__":

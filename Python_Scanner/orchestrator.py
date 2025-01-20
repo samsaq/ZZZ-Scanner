@@ -89,10 +89,15 @@ if __name__ == "__main__":
 
     pageLoadTime = 2
     discScanTime = 0.25
+    scantype = "All"
 
     if len(sys.argv) == 3:
         pageLoadTime = float(sys.argv[1])
         discScanTime = float(sys.argv[2])
+        scantype = str(
+            sys.argv[3]
+        )  # can be "All", "WEngine", "Character", "Disk" - determines what is scanned, defaults to All
+        # All will go in order: disk, wengine, character
 
     image_queue = Queue()
     GetImagesStartTime = time.time()
@@ -102,7 +107,8 @@ if __name__ == "__main__":
     GetImagesStopped = False
     imageScannerStopped = False
     get_images_process = Process(
-        target=getImages, args=((image_queue), (pageLoadTime), (discScanTime))
+        target=getImages,
+        args=((image_queue), (pageLoadTime), (discScanTime), (scantype)),
     )
     image_scanner_process = Process(target=imageScanner, args=(image_queue,))
 
@@ -149,7 +155,6 @@ if __name__ == "__main__":
     print("Image Scanner Time: ", imageScannerEndTime - imageScannerStartTime)
     print("Overall Time: ", time.time() - overallStartTime)
 
-
     log_path = os.path.join("Python_Scanner", "scan_output", "log.txt")
     # Calculate error rate
     if os.path.exists(log_path):
@@ -157,11 +162,13 @@ if __name__ == "__main__":
             with open(log_path, "r") as file:
                 log_lines = file.readlines()
                 print(f"Successfully read {len(log_lines)} lines from log file")
-                error_count = sum('ERROR' in line for line in log_lines)
-                info_count = sum('INFO - Processing' in line for line in log_lines)
+                error_count = sum("ERROR" in line for line in log_lines)
+                info_count = sum("INFO - Processing" in line for line in log_lines)
                 if info_count > 0:
                     error_rate = error_count / info_count * 100
-                    print(f"Error Rate: {error_rate:.2f}% ({error_count} errors out of {info_count} scans)")
+                    print(
+                        f"Error Rate: {error_rate:.2f}% ({error_count} errors out of {info_count} scans)"
+                    )
                 else:
                     print("No scans were processed - cannot calculate error rate")
         except Exception as e:
