@@ -399,7 +399,7 @@ def switchToWEngineBackpackFromDisks(pageLoadTime, pressTime=0.15):
     logging.info("Arrived at WEngine backpack view")
 
 
-def getWEngine(outputFile="TestImages/test.png"):
+def getWEngine(queue: Queue = None, outputFile="TestImages/test.png"):
     """
     Screenshot the WEngine item and save it to a file
 
@@ -418,6 +418,8 @@ def getWEngine(outputFile="TestImages/test.png"):
         )
     )
     screenshot.save(outputFile)
+    if queue:
+        queue.put(outputFile)
 
 
 # scan the WEngine tab in the backpack
@@ -469,11 +471,11 @@ def getWEngineTab(
 
             # Take screenshot of the WEngine item
             if save_folder:
-                getWEngine(os.path.join(save_folder, f"wengine_{scanNumber}.png"))
+                getWEngine(
+                    queue, os.path.join(save_folder, f"wengine_{scanNumber}.png")
+                )
             else:
                 getWEngine(f"TestImages/temp_{scanNumber}.png")
-                with open(f"TestImages/temp_{scanNumber}.png", "rb") as f:
-                    queue.put((scanNumber, f.read()))
                 os.remove(f"TestImages/temp_{scanNumber}.png")
 
             scanNumber += 1
@@ -538,7 +540,9 @@ def getWEngineTab(
             pyautogui.sleep(scanTime)
 
             if save_folder:
-                getWEngine(os.path.join(save_folder, f"wengine_{scanNumber}.png"))
+                getWEngine(
+                    queue, os.path.join(save_folder, f"wengine_{scanNumber}.png")
+                )
             else:
                 getWEngine(f"TestImages/temp_{scanNumber}.png")
                 with open(f"TestImages/temp_{scanNumber}.png", "rb") as f:
