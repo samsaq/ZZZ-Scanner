@@ -1,5 +1,34 @@
 # a file that contains metadata to check against for the image scanner
 
+character_names = [
+    "Alexandrina Sebastiane",
+    "Anby Demara",
+    "Anton Ivanov",
+    "Asaba Harumasa",
+    "Ben Bigger",
+    "Billy Kid",
+    "Burnice White",
+    "Caesar King",
+    "Corin Wickes",
+    "Ellen Joe",
+    "Grace Howard",
+    "Hoshimi Miyabi",
+    "Jane Doe",
+    "Koleda Belobog",
+    "Lighter",
+    "Luciana de Montefio",
+    "Nekomiya Mana",
+    "Nicole Demara",
+    "Piper Wheel",
+    "Qingyi",
+    "Seth Lowell",
+    "Soldier 11",
+    "Soukaku",
+    "Tsukishiro Yanagi",
+    "Von Lycaon",
+    "Zhu Yuan",
+]
+
 valid_weapon_names = [
     "[Lunar] Pleniluna",
     "[Lunar] Noviluna",
