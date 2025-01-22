@@ -5,6 +5,7 @@ character_names = [
     "Anby Demara",
     "Anton Ivanov",
     "Asaba Harumasa",
+    "Astra Yao",
     "Ben Bigger",
     "Billy Kid",
     "Burnice White",
@@ -85,6 +86,7 @@ valid_weapon_names = [
     "Kaboom the Cannon",
     "Bashful Demon",
     "Weeping Cradle",
+    "Elegant Vanity",
 ]
 
 # valid disk drive set names
