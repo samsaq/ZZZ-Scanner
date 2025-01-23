@@ -4,7 +4,7 @@ import re
 import cv2
 import pyautogui
 import pytesseract
-from keyboard import press
+import keyboard
 from validMetadata import character_names
 from multiprocessing import Queue
 from strsimpy import Cosine
@@ -42,10 +42,10 @@ def test_snapshot():
     screenshot = pyautogui.screenshot(
         "TestImages/test.png",
         region=(
-            int(0.54 * screenWidth),
-            int(0.255 * screenHeight),
-            int(0.24 * screenWidth),
-            int(0.08 * screenHeight),
+            int(0.375 * screenWidth),
+            int(0.145 * screenHeight),
+            int(0.1 * screenWidth),
+            int(0.06 * screenHeight),
         ),
     )
     screenshot.save("TestImages/test.png")
@@ -114,12 +114,14 @@ def is_character_owned(
             ),
         )
         # If we get here, the image was found (character is not owned)
-        press("esc")
+        keyboard.press("esc")
+        time.sleep(pageLoadTime)
         print("Agent is not owned")
         return False
     except pyautogui.ImageNotFoundException:
         # Image not found means the agent is owned
-        press("esc")
+        keyboard.press("esc")
+        time.sleep(pageLoadTime)
         print("Agent is owned")
         return True
     except Exception as e:
@@ -136,38 +138,120 @@ def get_character_snapshots(
     output_folder: str = "scan_input",
     resolution: ScreenResolution = screenResolution,
     pageLoadTime: float = 0.25,
+    getEquipment: bool = True,
 ):
+    # create the output folder if it doesn't exist
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
     wishReelIconPosition = (0.92 * screenWidth, 0.2 * screenHeight)
+    exitButtonPosition = (0.06 * screenWidth, 0.05 * screenHeight)
     pyautogui.moveTo(wishReelIconPosition)
     pyautogui.click()
-    pyautogui.sleep(pageLoadTime)
+    time.sleep(pageLoadTime)
 
     if not is_character_owned(target_folder, resolution, pageLoadTime):
         return
 
+    name_region = (
+        int(0.54 * screenWidth),
+        int(0.255 * screenHeight),
+        int(0.24 * screenWidth),
+        int(0.08 * screenHeight),
+    )
+
+    level_region = (
+        int(0.54 * screenWidth),
+        int(0.4 * screenHeight),
+        int(0.24 * screenWidth),
+        int(0.08 * screenHeight),
+    )
+
+    skill_region = (
+        int(0.375 * screenWidth),
+        int(0.145 * screenHeight),
+        int(0.1 * screenWidth),
+        int(0.06 * screenHeight),
+    )
+
     # take a snapshot of the character name
     screenshot = pyautogui.screenshot(
-        region=(
-            int(0.54 * screenWidth),
-            int(0.255 * screenHeight),
-            int(0.24 * screenWidth),
-            int(0.08 * screenHeight),
-        ),
+        region=name_region,
     )
     screenshot.save(f"./{output_folder}/agent_{agent_num}_name.png")
     if queue:
         queue.put(f"./{output_folder}/agent_{agent_num}_name.png")
 
     # character level and maxlevel snapshot
-    screenshot = pyautogui.screenshot(
-        region=(
-            int(0.54 * screenWidth),
-            int(0.4 * screenHeight),
-            int(0.1325 * screenWidth),
-            int(0.08 * screenHeight),
-        ),
-    )
+    screenshot = pyautogui.screenshot(region=level_region)
     screenshot.save(f"./{output_folder}/agent_{agent_num}_level.png")
+    if queue:
+        queue.put(f"./{output_folder}/agent_{agent_num}_level.png")
+
+    # handle skills
+    navigate_character_details("Skills")
+    skill_start_pos = (0.53 * screenWidth, 0.65 * screenHeight)
+    horz_skill_dist = 0.09 * screenWidth
+    vert_dist_to_core_skill = 0.3 * screenHeight
+    skill_names = [
+        "basic_attack",
+        "dodge",
+        "assist",
+        "special_attack",
+        "chain_attack",
+        "core",
+    ]
+    time.sleep(pageLoadTime)
+    pyautogui.moveTo(skill_start_pos)
+    pyautogui.click()
+    time.sleep(pageLoadTime)
+    screenshot = pyautogui.screenshot(region=skill_region)
+    screenshot.save(f"./{output_folder}/agent_{agent_num}_skill_{skill_names[0]}.png")
+    if queue:
+        queue.put(f"./{output_folder}/agent_{agent_num}_skill_{skill_names[0]}.png")
+    time.sleep(pageLoadTime)
+
+    for i in range(4):
+        pyautogui.moveRel(horz_skill_dist, 0)
+        pyautogui.click()
+        time.sleep(pageLoadTime)
+        screenshot = pyautogui.screenshot(region=skill_region)
+        screenshot.save(
+            f"./{output_folder}/agent_{agent_num}_skill_{skill_names[i+1]}.png"
+        )
+        if queue:
+            queue.put(
+                f"./{output_folder}/agent_{agent_num}_skill_{skill_names[i+1]}.png"
+            )
+    pyautogui.moveRel(0, -vert_dist_to_core_skill)
+    pyautogui.click()
+    time.sleep(pageLoadTime)
+    screenshot = pyautogui.screenshot(region=skill_region)
+    screenshot.save(f"./{output_folder}/agent_{agent_num}_skill_{skill_names[5]}.png")
+    if queue:
+        queue.put(f"./{output_folder}/agent_{agent_num}_skill_{skill_names[5]}.png")
+    pyautogui.moveTo(exitButtonPosition)
+    pyautogui.click()
+    time.sleep(pageLoadTime)
+
+    # grab the cinema screenshot
+    navigate_character_details("Cinema")
+    pyautogui.sleep(
+        pageLoadTime * 8
+    )  # this specific screen has a rather slow transition animation
+    screenshot = (
+        pyautogui.screenshot()
+    )  # we just need the whole screen, since we're looking for mindscape icons within most of it anyways
+    screenshot.save(f"./{output_folder}/agent_{agent_num}_cinema.png")
+    if queue:
+        queue.put(f"./{output_folder}/agent_{agent_num}_cinema.png")
+    pyautogui.moveTo(exitButtonPosition)
+    pyautogui.click()
+    time.sleep(pageLoadTime)
+
+    if getEquipment:
+        navigate_character_details("Equipment")
+        time.sleep(pageLoadTime)
 
 
 # intended to be a main function of sorts to be called in getImages.py for character image collection
@@ -179,9 +263,11 @@ def get_characters():
     pyautogui.moveTo(startPosition)
 
     # click through all the scrollable characters
+    agents_scanned = 0
     for i in range(num_characters - characters_in_final_row):
         pyautogui.click()
-        get_character_snapshots()
+        get_character_snapshots(agents_scanned)
+        agents_scanned += 1
         pyautogui.moveTo(startPosition)  # move back after character scan
         pyautogui.scroll(-1)
 
@@ -190,7 +276,8 @@ def get_characters():
     for i in range(characters_in_final_row):
         pyautogui.click()
         pyautogui.sleep(0.5)
-        get_character_snapshots()
+        get_character_snapshots(agents_scanned)
+        agents_scanned += 1
         # move to the next character, using absolute coordinates since we move the mouse in get_character_snapshots()
         cur_character_position = (
             cur_character_position[0] + distance_between_characters,
@@ -382,6 +469,164 @@ def preprocess_level_image(image_path: str, save_path: str = None):
     return binary_image
 
 
+def preprocess_skill_image(
+    image_path: str, save_path: str = None, coreSkill: bool = False
+):
+    """
+    Preprocess the skill image to get the skill level in white, and everything else in black
+
+    Args:
+        image_path (str): Path to the skill image
+        save_path (str, optional): Path to save the preprocessed image
+        coreSkill (bool, optional): Whether the skill is a core skill (so we can remove the play button)
+
+    Returns:
+        cv2.Mat: The preprocessed image
+    """
+    # Load the image
+    image = cv2.imread(image_path)
+    if image is None:
+        print(f"Error: Could not load image at {image_path}")
+        return None
+
+    # black out the rightmost 30% of the image if it is a core skill
+    if coreSkill:
+        height, width = image.shape[:2]
+        image[:, int(0.7 * width) :] = 0  # Set rightmost 30% to black
+        blacked_out_image = image
+    else:
+        blacked_out_image = image
+
+    # Convert the image to grayscale
+    gray = cv2.cvtColor(blacked_out_image, cv2.COLOR_BGR2GRAY)
+
+    # Aggressive threshold
+    binary_image = cv2.threshold(
+        gray,
+        240,  # Fixed threshold value
+        255,
+        cv2.THRESH_BINARY,
+    )[1]
+
+    # save the image if a save_path is provided
+    if save_path:
+        cv2.imwrite(save_path, binary_image)
+        print(f"Preprocessed image saved to {save_path}")
+
+    return binary_image
+
+
+def process_cinema_image(
+    image_path: str,
+    target_folder: str = "./Target_Images",
+    resolution: ScreenResolution = screenResolution,
+) -> str:
+    """
+    Process the cinema image to get the mindscape level
+
+    Args:
+        image_path (str): Path to the cinema image
+        target_folder (str, optional): Path to the target folder
+        resolution (ScreenResolution, optional): Current screen resolution
+
+    Returns:
+        str: The mindscape level (0 for none, 1 to 6 for the number of mindscapes unlocked)
+    """
+    locked_image_suffix = (
+        "-1440p" if resolution == ScreenResolution.RES_1440P else "-1080p"
+    )
+
+    # load the main image
+    image = cv2.imread(image_path)
+    if image is None:
+        print(f"Error: Could not load image at {image_path}")
+        return None
+
+    # check if the image has locked mindscape icons
+    lowest_locked_index = None
+    for i in range(1, 6):
+        current_image_path = (
+            f"{target_folder}/zzz-mindscape-locked-{i}{locked_image_suffix}.png"
+        )
+        template = cv2.imread(current_image_path)
+        if template is None:
+            print(f"Error: Could not load template at {current_image_path}")
+            continue
+
+        # Perform template matching
+        result = cv2.matchTemplate(image, template, cv2.TM_CCOEFF_NORMED)
+        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+
+        # If we find a match with high confidence
+        if max_val > 0.9:
+            lowest_locked_index = i
+            break
+
+    # if we didn't find any locked images, then all are unlocked
+    if lowest_locked_index is None:
+        return "6"  # we are at all unlocked
+    else:
+        return str(lowest_locked_index - 1)
+
+
+def process_skill_image(image_path: str, coreSkill: bool = False) -> str:
+    """
+    Process the skill image to get the skill level
+
+    Args:
+        image_path (str): Path to the skill image
+        coreSkill (bool, optional): Whether the skill is a core skill (so we can remove the play button & handle the different level ranges)
+
+    Returns:
+        str: The skill level
+    """
+    processed_image = preprocess_skill_image(image_path=image_path, coreSkill=coreSkill)
+
+    # scan the image
+    text = scan_image(processed_image)
+    text = " ".join(text)
+    # grab exactly 2 digits from the text
+    twoDigits = re.search(r"\d{2}", text)
+    if twoDigits:
+        text = twoDigits.group(0)
+    else:
+        # Fallback: try to get at least one digit (for low level skills)
+        oneDigit = re.search(r"\d", text)
+        if oneDigit:
+            text = oneDigit.group(0)
+        else:
+            print(f"Could not parse skill level from text: {text}")
+            return None
+
+    # correction step: if not a core skill, it can be between 1 and 16, else 1 and 7
+    # correct into the nearest valid level
+    if not coreSkill:
+        text = find_closest_number(
+            text,
+            [
+                "1",
+                "2",
+                "3",
+                "4",
+                "5",
+                "6",
+                "7",
+                "8",
+                "9",
+                "10",
+                "11",
+                "12",
+                "13",
+                "14",
+                "15",
+                "16",
+            ],
+        )
+    else:
+        text = find_closest_number(text, ["1", "2", "3", "4", "5", "6", "7"])
+    return text
+
+
 def process_name_image(image_path: str) -> str:
     """
     Process the name image to get the agent name
@@ -462,32 +707,21 @@ if __name__ == "__main__":
     # set cwd to the script location
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-    switchToZZZ()
+    # switchToZZZ()
     # time.sleep(0.25)
     # get_characters()
     # test_snapshot()
-    # get_character_snapshots()
-
-    # targetImage = "TestImages/testLvlImg.png"
-    # get a subsection of the image
-    # image = cv2.imread(targetImage)
-    # if image is None:
-    #     print(f"Error: Could not load image at {targetImage}")
-    #     exit(1)
-
-    # height, width = image.shape[:2]  # Correct order: height, width
-    # level_text_subsection = image[
-    #     int(0.2 * height) : int(0.8 * height),
-    #     int(0.675 * width) : int(1 * width),
-    # ]
-    # cv2.imwrite("TestImages/testLvlImgSubsection.png", level_text_subsection)
-    # image = preprocess_level_image(targetImage)
-    # cv2.imwrite("TestImages/testLvlImgPreprocessed.png", image)
-    # text = scan_image("TestImages/testLvlImgPreprocessed.png")
-    # print(text)
-
-    # level_image_path = "TestImages/testLvlImg.png"
-    # current_level, max_level = process_level_image(level_image_path)
-    # print(f"Current Level: {current_level}, Max Level: {max_level}")
-
-    navigate_character_details("Cinema")
+    # get_character_snapshots(0)
+    # temp = pyautogui.screenshot(
+    #     "test1.png",
+    #     region=(
+    #         int(0.375 * screenWidth),
+    #         int(0.145 * screenHeight),
+    #         int(0.1 * screenWidth),
+    #         int(0.06 * screenHeight),
+    #     ),
+    # )
+    # temp.save("./TestImages/test1.png")
+    # print(process_skill_image("./TestImages/test.png", coreSkill=False))
+    # print(process_skill_image("./TestImages/test1.png", coreSkill=True))
+    print(process_cinema_image("./TestImages/test3.png"))
