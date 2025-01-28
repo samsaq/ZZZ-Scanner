@@ -15,3 +15,10 @@ The scanner is just for PC, and works on **1080p and 1440p screens**. If you wan
 ## Branch Scope
 
 This branch is working to add weapon data (wengines, upgrade levels (weapon fusion), levels/mod-level) and character data (characters, their levels/promotions, talent levels, and what wengines & discs they are equipped with), so that they can be used by the [Zenless Optimizer](https://github.com/samsaq/ZZZ-Drive-Disk-Optimizer).
+
+### TODOs
+
+1. Grab a 1080p "Lv." image for the character weapon view (only the 1440p is there atm)
+2. Add a periodic check to see if a new version of the scanner is available on github so folks don't use an out of date version
+3. Seperate out set strings and similar data that is changed version to version from validMetaData into a seperate json file
+4. See if we can get that version data JSON to be downloadable-on-click from the electron frontend if a new version is available (and no other code changes are present between versions)
