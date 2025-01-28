@@ -106,11 +106,14 @@ def scan_image(image_path):
     return split_text
 
 
-def extract_metadata(result_text, image_path):
+def extract_metadata(result_text, image_path, provided_partition_number: int = None):
     # grab the data we need from the input text
     set_name = result_text[find_index_in_list("Set", result_text) + 1]
     # get partition number via the image path (eg: Partition1Scan1.png would be 1)
-    partition_number = re.search(r"Partition(\d+)Scan", image_path).group(1)
+    if provided_partition_number:
+        partition_number = provided_partition_number
+    else:
+        partition_number = re.search(r"Partition(\d+)Scan", image_path).group(1)
     # get the current and max levels of the drive, in the form of Lv. Current/Max
     drive_level = find_string_in_list(
         "/", result_text

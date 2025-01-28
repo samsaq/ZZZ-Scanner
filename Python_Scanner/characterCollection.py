@@ -5,9 +5,12 @@ import cv2
 import pyautogui
 import pytesseract
 import keyboard
-from validMetadata import character_names
+from validMetadata import character_names, valid_weapon_names
+from imageScanner import extract_metadata, correct_metadata, validate_disk_drive
+from preprocess_images import preprocess_image
 from multiprocessing import Queue
 from strsimpy import Cosine
+from getImages import selectParition
 
 
 class ScreenResolution:
@@ -40,15 +43,15 @@ def switchToZZZ():
 
 def test_snapshot():
     screenshot = pyautogui.screenshot(
-        "TestImages/test.png",
+        "TestImages/testDisc.png",
         region=(
-            int(0.375 * screenWidth),
-            int(0.145 * screenHeight),
-            int(0.1 * screenWidth),
-            int(0.06 * screenHeight),
+            int(0.31 * screenWidth),  # left
+            int(0.1 * screenHeight),  # top
+            int(0.2 * screenWidth),  # width
+            int(0.6 * screenHeight),  # height
         ),
     )
-    screenshot.save("TestImages/test.png")
+    screenshot.save("TestImages/testDisc.png")
 
 
 def navigate_character_details(target: str = "Base Stats"):
@@ -76,6 +79,47 @@ def navigate_character_details(target: str = "Base Stats"):
 
     pyautogui.moveTo(targetPos)
     pyautogui.click()
+
+
+def scanDiskDriveCharacter(
+    paritionNumber: int,
+    queue: Queue,
+    discScanTime: float,
+    outputFolder: str = "scan_input",
+    characterNumber: int = 0,
+):
+    """
+    Scan the disk drive for the given partition number, and save the screenshot to a file
+
+    Args:
+        paritionNumber (int): The partition number to scan
+        queue (Queue): The queue to put the image path in
+        discScanTime (float): The time to wait for the disk drive to load
+        outputFolder (str, optional): The folder to save the screenshot in, defaults to "scan_input"
+        characterNumber (int, optional): The character number to save the screenshot as, defaults to 0
+
+    Returns:
+        cv2.Mat: The screenshot of the disk drive
+    """
+    # get a screenshot of the disk drive after waiting for it to load, save it to a file
+    pyautogui.sleep(discScanTime)
+    screenshot = pyautogui.screenshot(
+        region=(
+            int(0.31 * screenWidth),  # left
+            int(0.1 * screenHeight),  # top
+            int(0.2 * screenWidth),  # width
+            int(0.55 * screenHeight),  # height
+        )
+    )
+    # save with partition number and scan number
+    save_path = (
+        f"./{outputFolder}/agent_{characterNumber}_partition_{paritionNumber}_scan.png"
+    )
+    screenshot.save(save_path)
+    # put the image path in the queue
+    if queue:
+        queue.put(save_path)
+    return screenshot
 
 
 def is_character_owned(
@@ -174,6 +218,13 @@ def get_character_snapshots(
         int(0.06 * screenHeight),
     )
 
+    weapon_region = (
+        int(0.31 * screenWidth),  # left
+        int(0.1 * screenHeight),  # top
+        int(0.2 * screenWidth),  # width
+        int(0.15 * screenHeight),  # height
+    )
+
     # take a snapshot of the character name
     screenshot = pyautogui.screenshot(
         region=name_region,
@@ -201,7 +252,7 @@ def get_character_snapshots(
         "chain_attack",
         "core",
     ]
-    time.sleep(pageLoadTime)
+    time.sleep(pageLoadTime * 4)  # this takes a bit longer to load typically
     pyautogui.moveTo(skill_start_pos)
     pyautogui.click()
     time.sleep(pageLoadTime)
@@ -249,8 +300,42 @@ def get_character_snapshots(
     pyautogui.click()
     time.sleep(pageLoadTime)
 
+    # get a snapshot of each equipped disk
     if getEquipment:
         navigate_character_details("Equipment")
+        time.sleep(pageLoadTime)
+        selectParition(1)
+        scanDiskDriveCharacter(1, queue, pageLoadTime, output_folder, agent_num)
+        time.sleep(pageLoadTime)
+        selectParition(2)
+        scanDiskDriveCharacter(2, queue, pageLoadTime, output_folder, agent_num)
+        time.sleep(pageLoadTime)
+        selectParition(3)
+        scanDiskDriveCharacter(3, queue, pageLoadTime, output_folder, agent_num)
+        time.sleep(pageLoadTime)
+        selectParition(4)
+        scanDiskDriveCharacter(4, queue, pageLoadTime, output_folder, agent_num)
+        time.sleep(pageLoadTime)
+        selectParition(5)
+        scanDiskDriveCharacter(5, queue, pageLoadTime, output_folder, agent_num)
+        time.sleep(pageLoadTime)
+        selectParition(6)
+        scanDiskDriveCharacter(6, queue, pageLoadTime, output_folder, agent_num)
+        time.sleep(pageLoadTime)
+        pyautogui.moveTo(exitButtonPosition)
+        pyautogui.click()
+        time.sleep(pageLoadTime)
+        # now to scan the agent's weapon
+        weapon_position = (0.725 * screenWidth, 0.5 * screenHeight)
+        pyautogui.moveTo(weapon_position)
+        pyautogui.click()
+        time.sleep(pageLoadTime * 4)  # this takes a bit longer
+        screenshot = pyautogui.screenshot(region=weapon_region)
+        screenshot.save(f"./{output_folder}/agent_{agent_num}_weapon.png")
+        if queue:
+            queue.put(f"./{output_folder}/agent_{agent_num}_weapon.png")
+        pyautogui.moveTo(exitButtonPosition)
+        pyautogui.click()
         time.sleep(pageLoadTime)
 
 
@@ -308,6 +393,10 @@ def scan_image(image_path):
 def find_closest_stat(
     stat, valid_stats
 ):  # find the closest stat in the input list to the input stat
+
+    if stat == "":
+        print("Error: Stat to correct is empty")
+        return None
     cosine = Cosine(2)
     closest_stat = None
     closest_stat_similarity = 0
@@ -349,9 +438,9 @@ def find_closest_number(value: str, valid_numbers: list[str]) -> str:
         return valid_numbers[-1]
 
 
-def preprocess_name_image(image_path: str, save_path: str = None):
+def preprocess_image_simple(image_path: str, save_path: str = None):
     """
-    Preprocess the name image to get the agent name
+    Preprocess the image by converting to grayscale and thresholding simply
 
     Args:
         image_path (str): Path to the name image
@@ -516,6 +605,137 @@ def preprocess_skill_image(
     return binary_image
 
 
+def preprocess_character_weapon_image(
+    image_path: str,
+    save_path: str = None,
+    target_folder: str = "./Target_Images",
+    resolution: ScreenResolution = screenResolution,
+    cutoff_offset: int = 10,
+):
+    """
+    Preprocess the character weapon image to get a black and white image of just the weapon name (accounting for varying amount of lines of text and different resolutions)
+
+    Args:
+        image_path (str): Path to the character weapon image
+        save_path (str, optional): Path to save the preprocessed image
+        target_folder (str, optional): Path to the target folder
+        resolution (ScreenResolution, optional): Current screen resolution
+        cutoff_offset (int, optional): Offset to add to the template match's y coordinate (percent of initial image height)
+
+    Returns:
+        cv2.Mat: The preprocessed image
+
+    Used In:
+        process_character_weapon_image()
+    """
+
+    # Load the image
+    image = cv2.imread(image_path)
+    if image is None:
+        print(f"Error: Could not load image at {image_path}")
+        return None
+
+    weapon_cutoff_image_suffix = (
+        "-1440p" if resolution == ScreenResolution.RES_1440P else "-1080p"
+    )
+    weapon_cutoff_image_path = (
+        f"{target_folder}/zzz-character-weapon-cutoff{weapon_cutoff_image_suffix}.png"
+    )
+    # load the template image
+    template = cv2.imread(weapon_cutoff_image_path)
+    if template is None:
+        print(f"Error: Could not load template at {weapon_cutoff_image_path}")
+        return None
+
+    # perform template matching
+    result = cv2.matchTemplate(image, template, cv2.TM_CCOEFF_NORMED)
+    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+
+    # cutoff the image vertically at the template match's y coordinate
+    # only keep the portion above where the template was found, minus the offset percentage
+    height, width = image.shape[:2]
+    cutoff_y = max_loc[1] - int(
+        cutoff_offset / 100 * height
+    )  # Convert offset to percentage
+    image = image[:cutoff_y, :]  # Keep only the top portion
+
+    # Convert the image to grayscale
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # Aggressive threshold
+    binary_image = cv2.threshold(
+        gray,
+        240,  # Fixed threshold value
+        255,
+        cv2.THRESH_BINARY,
+    )[1]
+
+    # NOTE: We aren't resizing the image here like in the other preprocess_images.py functions
+    # This is because the font size already varies between characters, and I don't want to have to set a resize width per character
+
+    # Save the image if a save_path is provided
+    if save_path:
+        cv2.imwrite(save_path, binary_image)
+        print(f"Preprocessed image saved to {save_path}")
+
+    return binary_image
+
+
+def process_character_disk_image(image_path: str, partition_number: int) -> dict:
+    """
+    Process the character disk image to get the disk data for comparison with the current scan's data to assign the disk to a character later
+
+    Args:
+        image_path (str): Path to the character disk image
+        partition_number (int): The partition number of the disk
+
+    Returns:
+        dict: The metadata of the disk or an empty dictionary if the disk is not valid
+    """
+    preprocess_image(
+        image_path,
+        target_images_folder="./Target_Images",
+        save_path=image_path,
+    )  # the regular preprocess_image function is used here as it is actually for disk images
+    result = scan_image(image_path)
+    result_metadata = extract_metadata(result, image_path, partition_number)
+    correct_metadata(result_metadata)
+    valid_disk_drive, error_message = validate_disk_drive(
+        result_metadata["set_name"],
+        result_metadata["drive_current_level"],
+        result_metadata["drive_max_level"],
+        result_metadata["partition_number"],
+        result_metadata["drive_base_stat"],
+        result_metadata["drive_base_stat_number"],
+        result_metadata["random_stats"],
+    )
+
+    if valid_disk_drive:
+        return result_metadata
+    else:
+        print(f"Error: Disk is not valid: {error_message}")
+        return {}
+
+
+def process_character_weapon_image(image_path: str) -> str:
+    """
+    Process the character weapon image to get the weapon name
+
+    Args:
+        image_path (str): Path to the character weapon image
+
+    Returns:
+        str: The weapon name, corrected to the known list of weapon names
+    """
+    processed_image = preprocess_character_weapon_image(image_path)
+    text = scan_image(processed_image)
+    text = " ".join(text)  # concatenate if needed
+
+    # correct to the known list of weapon names
+    text = find_closest_stat(text, valid_weapon_names)
+    return text
+
+
 def process_cinema_image(
     image_path: str,
     target_folder: str = "./Target_Images",
@@ -637,7 +857,7 @@ def process_name_image(image_path: str) -> str:
     Returns:
         str: The agent name, corrected to the known list of agent names
     """
-    processed_image = preprocess_name_image(image_path)
+    processed_image = preprocess_image_simple(image_path)
     # concatenate the text from the image
     text = scan_image(processed_image)
     text = " ".join(text)
@@ -707,6 +927,13 @@ if __name__ == "__main__":
     # set cwd to the script location
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
+    # set the path to the tesseract-ocr folder
+    tesseract_path = (
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "Tesseract-OCR")
+        + "\\tesseract.exe"
+    )
+    pytesseract.pytesseract.tesseract_cmd = tesseract_path
+
     # switchToZZZ()
     # time.sleep(0.25)
     # get_characters()
@@ -724,4 +951,4 @@ if __name__ == "__main__":
     # temp.save("./TestImages/test1.png")
     # print(process_skill_image("./TestImages/test.png", coreSkill=False))
     # print(process_skill_image("./TestImages/test1.png", coreSkill=True))
-    print(process_cinema_image("./TestImages/test3.png"))
+    print(process_character_disk_image("./TestImages/testDisc.png", 1))
