@@ -1,5 +1,6 @@
 import os, cv2
 from typing import Literal
+from getImages import ScreenResolution
 
 
 # given a path, preprocess the image for tesseract - for disk drive images
@@ -236,6 +237,251 @@ def preprocess_wengine_image(
 
     return binary_image, upgrade_rank
 
+
+### Character Preprocessing Functions ###
+def preprocess_image_simple(image_path: str, save_path: str = None):
+    """
+    Preprocess the image by converting to grayscale and thresholding simply
+
+    Args:
+        image_path (str): Path to the name image
+        save_path (str, optional): Path to save the preprocessed image
+
+    Returns:
+        cv2.Mat: The preprocessed image
+
+    Used In:
+        process_name_image()
+    """
+    # Load the image
+    image = cv2.imread(image_path)
+    if image is None:
+        print(f"Error: Could not load image at {image_path}")
+        return None
+
+    # Convert the image to grayscale
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # Aggressive threshold
+    binary_image = cv2.threshold(
+        gray,
+        240,  # Fixed threshold value
+        255,
+        cv2.THRESH_BINARY,
+    )[1]
+
+    # NOTE: We aren't resizing the image here like in the other preprocess_images.py functions
+    # This is because the font size already varies between characters, and I don't want to have to set a resize width per character
+
+    # Save the image if a save_path is provided
+    if save_path:
+        cv2.imwrite(save_path, binary_image)
+        print(f"Preprocessed image saved to {save_path}")
+
+    return binary_image
+
+
+def preprocess_level_image(image_path: str, save_path: str = None):
+    """
+    Preprocess the level image to get the agent level
+
+    Args:
+        image_path (str): Path to the level image
+        save_path (str, optional): Path to save the preprocessed image
+
+    Returns:
+        cv2.Mat: The preprocessed image
+
+    Used In:
+        process_level_image()
+    """
+    # Load the image
+    image = cv2.imread(image_path)
+    if image is None:
+        print(f"Error: Could not load image at {image_path}")
+        return None
+
+    # part of the level text we later want to extract is black, so we need to grab the subsection
+    height, width = image.shape[:2]
+    subsection_height = int(0.6 * height)  # 0.8 - 0.2 = 0.6
+    subsection_width = int(0.325 * width)  # 1 - 0.675 = 0.325
+    y_start = int(0.2 * height)
+    x_start = int(0.675 * width)
+
+    level_text_subsection = image[
+        y_start : y_start + subsection_height,
+        x_start : x_start + subsection_width,
+    ]
+
+    # white any black pixels in the subsection
+    level_text_subsection[level_text_subsection == 0] = 255
+
+    # resize the subsection to half size since the font size of the max level is larger
+    new_height = subsection_height // 2
+    new_width = subsection_width // 2
+    resized_subsection = cv2.resize(level_text_subsection, (new_width, new_height))
+
+    # calculate centering offsets
+    y_offset = (subsection_height - new_height) // 2
+    x_offset = (subsection_width - new_width) // 2
+
+    # black out the original subsection area
+    image[
+        y_start : y_start + subsection_height,
+        x_start : x_start + subsection_width,
+    ] = 0
+
+    # paste the resized subsection in the center of the blacked out area
+    image[
+        y_start + y_offset : y_start + y_offset + new_height,
+        x_start + x_offset : x_start + x_offset + new_width,
+    ] = resized_subsection
+
+    # Convert the image to grayscale
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # Aggressive threshold
+    binary_image = cv2.threshold(
+        gray,
+        240,  # Fixed threshold value
+        255,
+        cv2.THRESH_BINARY,
+    )[1]
+
+    # NOTE: We aren't resizing the image here like in the other preprocess_images.py functions
+    # This is because the font size already varies between characters, and I don't want to have to set a resize width per character
+
+    # Save the image if a save_path is provided
+    if save_path:
+        cv2.imwrite(save_path, binary_image)
+        print(f"Preprocessed image saved to {save_path}")
+
+    return binary_image
+
+
+def preprocess_skill_image(
+    image_path: str, save_path: str = None, coreSkill: bool = False
+):
+    """
+    Preprocess the skill image to get the skill level in white, and everything else in black
+
+    Args:
+        image_path (str): Path to the skill image
+        save_path (str, optional): Path to save the preprocessed image
+        coreSkill (bool, optional): Whether the skill is a core skill (so we can remove the play button)
+
+    Returns:
+        cv2.Mat: The preprocessed image
+    """
+    # Load the image
+    image = cv2.imread(image_path)
+    if image is None:
+        print(f"Error: Could not load image at {image_path}")
+        return None
+
+    # black out the rightmost 30% of the image if it is a core skill
+    if coreSkill:
+        height, width = image.shape[:2]
+        image[:, int(0.7 * width) :] = 0  # Set rightmost 30% to black
+        blacked_out_image = image
+    else:
+        blacked_out_image = image
+
+    # Convert the image to grayscale
+    gray = cv2.cvtColor(blacked_out_image, cv2.COLOR_BGR2GRAY)
+
+    # Aggressive threshold
+    binary_image = cv2.threshold(
+        gray,
+        240,  # Fixed threshold value
+        255,
+        cv2.THRESH_BINARY,
+    )[1]
+
+    # save the image if a save_path is provided
+    if save_path:
+        cv2.imwrite(save_path, binary_image)
+        print(f"Preprocessed image saved to {save_path}")
+
+    return binary_image
+
+
+def preprocess_character_weapon_image(
+    resolution: ScreenResolution,
+    image_path: str,
+    save_path: str = None,
+    target_folder: str = "./Target_Images",
+    cutoff_offset: int = 10,
+):
+    """
+    Preprocess the character weapon image to get a black and white image of just the weapon name (accounting for varying amount of lines of text and different resolutions)
+
+    Args:
+        resolution (ScreenResolution): Current screen resolution
+        image_path (str): Path to the character weapon image
+        save_path (str, optional): Path to save the preprocessed image
+        target_folder (str, optional): Path to the target folder
+        cutoff_offset (int, optional): Offset to add to the template match's y coordinate (percent of initial image height)
+
+    Returns:
+        cv2.Mat: The preprocessed image
+
+    Used In:
+        process_character_weapon_image()
+    """
+
+    # Load the image
+    image = cv2.imread(image_path)
+    if image is None:
+        print(f"Error: Could not load image at {image_path}")
+        return None
+
+    weapon_cutoff_image_suffix = (
+        "-1440p" if resolution == ScreenResolution.RES_1440P else "-1080p"
+    )
+    weapon_cutoff_image_path = (
+        f"{target_folder}/zzz-character-weapon-cutoff{weapon_cutoff_image_suffix}.png"
+    )
+    # load the template image
+    template = cv2.imread(weapon_cutoff_image_path)
+    if template is None:
+        print(f"Error: Could not load template at {weapon_cutoff_image_path}")
+        return None
+
+    # perform template matching
+    result = cv2.matchTemplate(image, template, cv2.TM_CCOEFF_NORMED)
+    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+
+    # cutoff the image vertically at the template match's y coordinate
+    # only keep the portion above where the template was found, minus the offset percentage
+    height, width = image.shape[:2]
+    cutoff_y = max_loc[1] - int(
+        cutoff_offset / 100 * height
+    )  # Convert offset to percentage
+    image = image[:cutoff_y, :]  # Keep only the top portion
+
+    # Convert the image to grayscale
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # Aggressive threshold
+    binary_image = cv2.threshold(
+        gray,
+        240,  # Fixed threshold value
+        255,
+        cv2.THRESH_BINARY,
+    )[1]
+
+    # NOTE: We aren't resizing the image here like in the other preprocess_images.py functions
+    # This is because the font size already varies between characters, and I don't want to have to set a resize width per character
+
+    # Save the image if a save_path is provided
+    if save_path:
+        cv2.imwrite(save_path, binary_image)
+        print(f"Preprocessed image saved to {save_path}")
+
+    return binary_image
+
+### End of Character Preprocessing Functions ###
 
 if __name__ == "__main__":
     os.chdir(os.path.dirname(os.path.abspath(__file__)))

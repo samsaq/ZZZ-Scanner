@@ -5,8 +5,10 @@ import os
 import json
 import logging
 import pytesseract
+import cv2
 from strsimpy import Cosine  # used for string cosine similarity
-from preprocess_images import preprocess_image, preprocess_wengine_image
+from preprocess_images import preprocess_image, preprocess_wengine_image, preprocess_image_simple, preprocess_level_image, preprocess_skill_image, preprocess_character_weapon_image
+from getImages import ScreenResolution
 from validMetadata import (
     valid_set_names,
     valid_partition_1_main_stats,
@@ -17,6 +19,7 @@ from validMetadata import (
     valid_partition_6_main_stats,
     valid_random_stats,
     valid_weapon_names,
+    character_names,
     validate_disk_drive,
     get_expected_main_stat_value,
     get_expected_sub_stat_values,
@@ -225,6 +228,29 @@ def find_closest_stat(
 
     return closest_stat
 
+def find_closest_number(value: str, valid_numbers: list[str]) -> str:
+    """
+    Find the closest number from a list of valid numbers
+
+    Args:
+        value (str): The number to check (as string)
+        valid_numbers (list[str]): List of valid numbers (as strings)
+
+    Returns:
+        str: The closest valid number (as string)
+    """
+    try:
+        num = int(value)
+        valid_nums = [int(x) for x in valid_numbers]
+        closest = min(valid_nums, key=lambda x: abs(x - num))
+
+        if closest != num:
+            print(f"Corrected {value} to {closest}")
+
+        return str(closest)
+    except ValueError:
+        print(f"Error converting '{value}' to number, returning last valid number")
+        return valid_numbers[-1]
 
 # a function that will correct metadata based off of cosine similarity to known correct metadata values
 # eg: for the set name, we can compare the input set name to a list of known set names use the cosine similarity to find the closest match
@@ -350,7 +376,7 @@ def correct_metadata(metadata):
         )
 
 
-# WEngine Specific Functions
+### WEngine Specific Functions ###
 def process_wengine_text(text, preprocess_rank=1):
     """
     Processes the text from a wengine screenshot to extract the name and level data
@@ -442,11 +468,255 @@ def correct_wengine_data(data):
     return data
 
 
-# End of WEngine Specific Functions
+### End of WEngine Specific Functions ###
+
+### Character Specific Functions ###
+
+def process_character_disk_image(image_path: str, partition_number: int) -> dict:
+    """
+    Process the character disk image to get the disk data for comparison with the current scan's data to assign the disk to a character later
+
+    Args:
+        image_path (str): Path to the character disk image
+        partition_number (int): The partition number of the disk
+
+    Returns:
+        dict: The metadata of the disk or an empty dictionary if the disk is not valid
+    """
+    preprocess_image(
+        image_path,
+        target_images_folder="./Target_Images",
+        save_path=image_path,
+    )  # the regular preprocess_image function is used here as it is actually for disk images
+    result = scan_image(image_path)
+    result_metadata = extract_metadata(result, image_path, partition_number)
+    correct_metadata(result_metadata)
+    valid_disk_drive, error_message = validate_disk_drive(
+        result_metadata["set_name"],
+        result_metadata["drive_current_level"],
+        result_metadata["drive_max_level"],
+        result_metadata["partition_number"],
+        result_metadata["drive_base_stat"],
+        result_metadata["drive_base_stat_number"],
+        result_metadata["random_stats"],
+    )
+
+    if valid_disk_drive:
+        return result_metadata
+    else:
+        print(f"Error: Disk is not valid: {error_message}")
+        return {}
+
+
+def process_character_weapon_image(resolution: ScreenResolution, image_path: str) -> str:
+    """
+    Process the character weapon image to get the weapon name
+
+    Args:
+        resolution (ScreenResolution): Current screen resolution
+        image_path (str): Path to the character weapon image
+
+    Returns:
+        str: The weapon name, corrected to the known list of weapon names
+    """
+    processed_image = preprocess_character_weapon_image(resolution, image_path)
+    text = scan_image(processed_image)
+    text = " ".join(text)  # concatenate if needed
+
+    # correct to the known list of weapon names
+    text = find_closest_stat(text, valid_weapon_names, plus_modifier=False) 
+    return text
+
+
+def process_cinema_image(
+    resolution: ScreenResolution,
+    image_path: str,
+    target_folder: str = "./Target_Images",
+) -> str:
+    """
+    Process the cinema image to get the mindscape level
+
+    Args:
+        resolution (ScreenResolution): Current screen resolution
+        image_path (str): Path to the cinema image
+        target_folder (str, optional): Path to the target folder
+
+    Returns:
+        str: The mindscape level (0 for none, 1 to 6 for the number of mindscapes unlocked)
+    """
+    locked_image_suffix = (
+        "-1440p" if resolution == ScreenResolution.RES_1440P else "-1080p"
+    )
+
+    # load the main image
+    image = cv2.imread(image_path)
+    if image is None:
+        print(f"Error: Could not load image at {image_path}")
+        return None
+
+    # check if the image has locked mindscape icons
+    lowest_locked_index = None
+    for i in range(1, 6):
+        current_image_path = (
+            f"{target_folder}/zzz-mindscape-locked-{i}{locked_image_suffix}.png"
+        )
+        template = cv2.imread(current_image_path)
+        if template is None:
+            print(f"Error: Could not load template at {current_image_path}")
+            continue
+
+        # Perform template matching
+        result = cv2.matchTemplate(image, template, cv2.TM_CCOEFF_NORMED)
+        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+
+        # If we find a match with high confidence
+        if max_val > 0.9:
+            lowest_locked_index = i
+            break
+
+    # if we didn't find any locked images, then all are unlocked
+    if lowest_locked_index is None:
+        return "6"  # we are at all unlocked
+    else:
+        return str(lowest_locked_index - 1)
+
+
+def process_skill_image(image_path: str, coreSkill: bool = False) -> str:
+    """
+    Process the skill image to get the skill level
+
+    Args:
+        image_path (str): Path to the skill image
+        coreSkill (bool, optional): Whether the skill is a core skill (so we can remove the play button & handle the different level ranges)
+
+    Returns:
+        str: The skill level
+    """
+    processed_image = preprocess_skill_image(image_path=image_path, coreSkill=coreSkill)
+
+    # scan the image
+    text = scan_image(processed_image)
+    text = " ".join(text)
+    # grab exactly 2 digits from the text
+    twoDigits = re.search(r"\d{2}", text)
+    if twoDigits:
+        text = twoDigits.group(0)
+    else:
+        # Fallback: try to get at least one digit (for low level skills)
+        oneDigit = re.search(r"\d", text)
+        if oneDigit:
+            text = oneDigit.group(0)
+        else:
+            print(f"Could not parse skill level from text: {text}")
+            return None
+
+    # correction step: if not a core skill, it can be between 1 and 16, else 1 and 7
+    # correct into the nearest valid level
+    if not coreSkill:
+        text = find_closest_number(
+            text,
+            [
+                "1",
+                "2",
+                "3",
+                "4",
+                "5",
+                "6",
+                "7",
+                "8",
+                "9",
+                "10",
+                "11",
+                "12",
+                "13",
+                "14",
+                "15",
+                "16",
+            ],
+        )
+    else:
+        text = find_closest_number(text, ["1", "2", "3", "4", "5", "6", "7"])
+    return text
+
+
+def process_name_image(image_path: str) -> str:
+    """
+    Process the name image to get the agent name
+
+    Args:
+        image_path (str): Path to the name image
+
+    Returns:
+        str: The agent name, corrected to the known list of agent names
+    """
+    processed_image = preprocess_image_simple(image_path)
+    # concatenate the text from the image
+    text = scan_image(processed_image)
+    text = " ".join(text)
+    # correct it to the known list of agent names
+    text = find_closest_stat(text, character_names, plus_modifier=False)
+    return text
+
+
+def process_level_image(image_path: str) -> tuple[str, str]:
+    """
+    Process the level image to get the agent level
+
+    Args:
+        image_path (str): Path to the level image
+
+    Returns:
+        str: The agent level
+    """
+    processed_image = preprocess_level_image(image_path)
+    text = scan_image(processed_image)
+
+    # if the text is only one string, we need to split it and grab the two level numbers from it
+    if len(text) == 1:
+        # Match two sequences of two digits
+        match = re.search(r"(\d{2}).*?(\d{2})", text[0])
+        if match:
+            current_level = match.group(1)
+            max_level = match.group(2)
+        else:
+            print(f"Could not parse levels from text: {text[0]}")
+            print("Assuming max leveled character (60/60)")
+            current_level = "60"
+            max_level = "60"
+    else:
+        # if not, we can clean and grab the two numbers from the list
+        # clean all members of non-digit characters
+        text = [re.sub(r"\D", "", t) for t in text]
+        # strip all of them
+        text = [t.strip() for t in text]
+        # remove any empty strings
+        text = list(filter(None, text))
+        current_level = text[0]
+        max_level = text[1]
+
+    # correction for the level text
+    # the maxlevel is one of "10", "20", "30", "40", "50", "60"
+    # the cur level must be equal to or less than the max level (up to 10 below)
+
+    # correct the max level to the nearest valid level
+    max_level = find_closest_number(max_level, ["10", "20", "30", "40", "50", "60"])
+
+    # correct the current level
+    # make sure the current level is less than or equal to the max level
+    if int(current_level) > int(max_level):
+        current_level = max_level
+
+    # if it is more than 10 below the max level, set it to ten below the max level
+    if int(current_level) < int(max_level) - 10:
+        current_level = int(max_level) - 10
+
+    return current_level, max_level
+
+### End of Character Specific Functions ###
 
 
 # the main function that will be called to process the images in orchestrator.py
-def imageScanner(queue: Queue):
+def imageScanner(queue: Queue, resolution: ScreenResolution):
     setup_logging()
     # scan through all images in the scan_input folder
     current_scan_type = None
@@ -552,6 +822,29 @@ def imageScanner(queue: Queue):
                     for key, value in result_metadata.items():
                         print(f"{key}: {value}")
                     print("--------------------------------------------------")
+            elif current_scan_type == "Character":
+                cur_character_data = {}
+                if image_path.contains("name"):
+                    cur_character_data["name"] = process_name_image(image_path)
+                elif image_path.contains("level"):
+                    curLevel, curMaxLevel = process_level_image(image_path)
+                    cur_character_data["level"] = curLevel
+                    cur_character_data["max_level"] = curMaxLevel
+                elif image_path.contains("skill"):
+                    cur_skill_name = image_path.split("_skill_")[1].split("_")[0]
+                    isCoreSkill = cur_skill_name == "core"
+                    cur_character_data[cur_skill_name + "_level"] = process_skill_image(image_path, isCoreSkill)
+                elif image_path.contains("weapon"):
+                    #TODO: Need more weapon info in order to match to a specific weapon
+                    cur_character_data["weapon"] = process_character_weapon_image(resolution=resolution, image_path=image_path)
+                    character_data.append(cur_character_data)
+                    cur_character_data = {} # weapon is the final data point for a character
+                elif image_path.contains("cinema"):
+                    cur_character_data["mindscape_level"] = process_cinema_image(resolution=resolution, image_path=image_path)
+                elif image_path.contains("disk"):
+                    # grab the partition number from the image path in form f"./{outputFolder}/agent_{characterNumber}_partition_{paritionNumber}_scan.png"
+                    partition_number = image_path.split("_partition_")[1].split("_scan")[0]
+                    cur_character_data["disk_" + partition_number] = process_character_disk_image(image_path=image_path, partition_number=partition_number)
 
     # write the data to a JSON file for later use inside of the scan_output folder
     logging.info("Finished processing. Writing scan data to file")

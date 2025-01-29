@@ -341,6 +341,12 @@ def get_character_snapshots(
 
 # intended to be a main function of sorts to be called in getImages.py for character image collection
 def get_characters():
+    """
+    Get the character images for all characters in the character list
+
+    Used In:
+        getImages.py's getImages() function
+    """
     num_characters = len(character_names)
     characters_in_final_row = 7
     startPosition = (0.57 * screenWidth, 0.045 * screenHeight)
