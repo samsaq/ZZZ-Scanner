@@ -1,4 +1,4 @@
-# ZZZ-Drive-Disk-Scanner
+# ZZZ-Scanner
 
 A program that scans your drive discs in [Zenless Zone Zero](https://zenless.hoyoverse.com/) & saves them for use in the [Zenless Optimizer](https://github.com/samsaq/ZZZ-Drive-Disk-Optimizer)
 
